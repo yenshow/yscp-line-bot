@@ -30,7 +30,7 @@ LINE_CHANNEL_ACCESS_TOKEN=您的_Channel_Access_Token
 LINE_CHANNEL_SECRET=您的_Channel_Secret
 PORT=6000
 EVENT_TOKEN=your_unique_verification_token_here
-WEBHOOK_URL=http://localhost:6000/api/hcp/event-receiver
+WEBHOOK_URL=http://localhost:6000/api/linebot/hcp-event-receiver
 NGROK_URL=
 PUBLIC_URL=
 EOF
@@ -105,6 +105,16 @@ curl -s http://localhost:4040/api/tunnels > /dev/null && echo "✅ ngrok 隧道�
     exit 1
 }
 
+# 執行事件訂閱（新裝置初始化）
+echo "📨 執行事件訂閱..."
+if node scripts/subscribe-events.js; then
+    echo "✅ 事件訂閱完成"
+else
+    echo "⚠️  事件訂閱失敗，請手動在 HCP 管理介面訂閱事件"
+    echo "   Webhook URL: $WEBHOOK_URL"
+fi
+echo ""
+
 echo "🎉 服務已啟動！"
 echo "📋 服務資訊:"
 echo "   本地: http://localhost:6000"
@@ -112,7 +122,7 @@ echo "   Webhook: $WEBHOOK_URL"
 echo "   監控: http://localhost:4040"
 echo ""
 echo "📝 下一步:"
-echo "   1. 在 HCP 管理介面訂閱事件"
+echo "   1. ✅ 事件訂閱已完成（如失敗請手動在 HCP 管理介面訂閱）"
 echo "      - Webhook URL: $WEBHOOK_URL"
 echo "   2. 設定管理員用戶（編輯 data/user-management.json）"
 echo "   3. 手動同步用戶: node scripts/user-sync.js"
