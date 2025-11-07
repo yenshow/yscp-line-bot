@@ -31,6 +31,8 @@ LINE_CHANNEL_SECRET=您的_Channel_Secret
 PORT=6000
 EVENT_TOKEN=your_unique_verification_token_here
 WEBHOOK_URL=http://localhost:6000/api/hcp/event-receiver
+NGROK_URL=
+PUBLIC_URL=
 EOF
     echo "✅ 已建立 .env 範例檔案"
     echo "⚠️  請編輯 .env 檔案，填入您的實際配置"
@@ -61,15 +63,19 @@ if [ -z "$NGROK_URL" ]; then
     exit 1
 fi
 
-WEBHOOK_URL="${NGROK_URL}/api/hcp/event-receiver"
+WEBHOOK_URL="${NGROK_URL}/api/linebot/hcp-event-receiver"
 # 跨平台兼容的 sed 命令（支援 Linux、macOS、Windows Git Bash/WSL）
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS 需要備份後綴
     sed -i.bak "s|^WEBHOOK_URL=.*|WEBHOOK_URL=$WEBHOOK_URL|" .env
+    sed -i.bak "s|^NGROK_URL=.*|NGROK_URL=$NGROK_URL|" .env
+    sed -i.bak "s|^PUBLIC_URL=.*|PUBLIC_URL=$NGROK_URL|" .env
     rm -f .env.bak
 else
     # Linux / WSL / Windows Git Bash
     sed -i "s|^WEBHOOK_URL=.*|WEBHOOK_URL=$WEBHOOK_URL|" .env
+    sed -i "s|^NGROK_URL=.*|NGROK_URL=$NGROK_URL|" .env
+    sed -i "s|^PUBLIC_URL=.*|PUBLIC_URL=$NGROK_URL|" .env
 fi
 echo "✅ ngrok 隧道已建立: $WEBHOOK_URL"
 

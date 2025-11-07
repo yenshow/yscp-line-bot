@@ -71,9 +71,16 @@ HCP_SK=您的_Secret_Key
 LINE_CHANNEL_ACCESS_TOKEN=您的_Channel_Access_Token
 LINE_CHANNEL_SECRET=您的_Channel_Secret
 
+# 伺服器配置
+PORT=6000
+
 # Webhook 配置
-WEBHOOK_URL=https://您的公開域名/api/hcp/event-receiver
+WEBHOOK_URL=https://您的公開域名/api/linebot/hcp-event-receiver
 EVENT_TOKEN=您的唯一驗證Token
+
+# 公開 URL 配置（用於圖片顯示）
+NGROK_URL=https://您的ngrok域名.ngrok-free.dev
+PUBLIC_URL=https://您的公開域名
 ```
 
 ### 事件訂閱

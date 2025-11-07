@@ -3,13 +3,23 @@
 ## 🎯 系統需求
 
 **支援平台**: Linux、macOS、Windows (透過 Git Bash 或 WSL)  
-**必要軟體**: Node.js 16+、npm、ngrok  
+**必要軟體**: Git、Node.js 16+、npm、ngrok  
 **必要帳號**: HCP API 憑證、Line Bot 憑證
 
 ## 🚀 快速安裝
 
-### 1. 安裝必要軟體
+### 1. 下載專案
 
+使用 git 下載整個專案：
+
+```bash
+git clone https://github.com/yenshow/yscp-line-bot.git
+cd yscp-line-bot
+```
+
+### 2. 安裝必要軟體
+
+**Git**: 前往 [git-scm.com](https://git-scm.com/) 下載並安裝（Windows 用戶需要安裝 Git for Windows）  
 **Node.js**: 前往 [nodejs.org](https://nodejs.org/) 下載 LTS 版本  
 **ngrok**: 前往 [ngrok.com/download](https://ngrok.com/download) 下載並設定 authtoken
 
@@ -52,10 +62,9 @@ sudo yum install -y nodejs
 # 3. 在 WSL 中執行腳本
 ```
 
-### 2. 一鍵啟動（推薦）
+### 3. 一鍵啟動（推薦）
 
 ```bash
-cd backend
 npm run quick-start
 ```
 
@@ -73,22 +82,38 @@ npm run quick-start
 ### 1. 安裝依賴
 
 ```bash
-cd backend
 npm install
 ```
 
 ### 2. 建立 `.env` 檔案
 
+在專案根目錄建立 `.env` 檔案，並填入以下配置：
+
 ```env
+# HCP API 配置
 HCP_HOST=https://yscp.yenshow.com
 HCP_AK=您的_Access_Key
 HCP_SK=您的_Secret_Key
+
+# Line Bot 配置
 LINE_CHANNEL_ACCESS_TOKEN=您的_Channel_Access_Token
 LINE_CHANNEL_SECRET=您的_Channel_Secret
+
+# 伺服器配置
 PORT=6000
+
+# Webhook 配置
+WEBHOOK_URL=http://localhost:6000/api/linebot/hcp-event-receiver
 EVENT_TOKEN=hcp_line_bot_2024_secure_token
-WEBHOOK_URL=http://localhost:6000/api/hcp/event-receiver
+
+# 公開 URL 配置（用於圖片顯示，Line Bot 需要公網可訪問的 URL）
+# NGROK_URL: ngrok 公開 URL（開發環境使用，quick-start 腳本會自動填入）
+# PUBLIC_URL: 生產環境公開域名（生產環境使用，如果設定則優先使用此值）
+NGROK_URL=
+PUBLIC_URL=
 ```
+
+> 💡 **提示**：使用 `npm run quick-start` 時，腳本會自動建立 `.env` 範例檔案，並在啟動 ngrok 後自動填入 `NGROK_URL`、`PUBLIC_URL` 和 `WEBHOOK_URL`。
 
 ### 3. 啟動服務
 
@@ -106,6 +131,12 @@ npm run quick-start
 ### 4. 服務管理
 
 ```bash
+# 啟動服務
+npm start
+
+# 停止服務
+npm run stop
+
 # 重啟服務（推薦）
 npm run restart
 
@@ -115,14 +146,26 @@ npm run reload
 # 完全重置服務（清除並重新啟動）
 npm run reset
 
-# 停止服務
-npm run stop
+# 完全移除服務
+npm run delete
 
 # 查看服務狀態
 npm run status
 
 # 查看實時日誌
 npm run logs
+
+# 查看應用程式日誌
+npm run logs-app
+
+# 查看錯誤日誌
+npm run logs-error
+
+# 打開監控儀表板
+npm run monitor
+
+# 手動清理日誌檔案（保留7天）
+npm run log-cleanup
 ```
 
 > 📖 詳細重啟流程請參考 [RESTART_GUIDE.md](RESTART_GUIDE.md)
@@ -131,20 +174,33 @@ npm run logs
 
 ### HCP API 配置
 
-登入 HCP 管理介面，獲取 `HCP_HOST`、`HCP_AK`、`HCP_SK`
+登入 HCP 管理介面，獲取以下配置：
+
+- `HCP_HOST`: HCP 平台主機地址（預設：`https://yscp.yenshow.com`）
+- `HCP_AK`: HCP Access Key
+- `HCP_SK`: HCP Secret Key
 
 ### Line Bot 配置
 
-前往 [Line Developers Console](https://developers.line.biz/console/)，建立 Messaging API Channel，獲取 `LINE_CHANNEL_ACCESS_TOKEN`、`LINE_CHANNEL_SECRET`
+前往 [Line Developers Console](https://developers.line.biz/console/)，建立 Messaging API Channel，獲取：
+
+- `LINE_CHANNEL_ACCESS_TOKEN`: Line Bot Channel Access Token
+- `LINE_CHANNEL_SECRET`: Line Bot Channel Secret
+
+**重要**：在 Line Developers Console 中設定 Webhook URL 為：`https://您的公開域名/webhook` 或 `https://您的公開域名/api/linebot`
 
 ### Webhook 設定
 
-在 Line Developers Console 設定 Webhook URL: `https://your-ngrok-url.ngrok.io/webhook`
+**Line Bot Webhook**（用於接收 Line Bot 訊息）：
 
-**HCP 事件接收端點**（已配置）：
+- 在 Line Developers Console 設定 Webhook URL: `https://your-ngrok-url.ngrok.io/webhook` 或 `https://your-ngrok-url.ngrok.io/api/linebot`
+- 確保 Webhook 已啟用
 
-- 主要端點：`/api/linebot/hcp-event-receiver`
+**HCP 事件接收端點**（用於接收 HCP 事件推送）：
+
+- 主要端點：`/api/linebot/hcp-event-receiver`（推薦）
 - 向後兼容：`/api/hcp/event-receiver`
+- 在 HCP 管理介面設定 Webhook URL 時使用上述端點之一
 
 ## 🧪 測試安裝
 
@@ -220,9 +276,12 @@ npm run start              # 重新啟動
 **無法接收事件**
 
 1. 檢查 HCP 管理介面中的事件訂閱設定
-2. 確認 Webhook URL 正確設定
+2. 確認 Webhook URL 正確設定：`https://您的域名/api/linebot/hcp-event-receiver`
 3. 檢查 `data/event-types.json` 中的事件類型配置
-4. 查看日誌：`npm run logs-app`
+4. 查看日誌：
+   - `npm run logs-app` - 查看應用程式日誌
+   - `npm run logs-error` - 查看錯誤日誌
+   - `npm run logs` - 查看所有實時日誌
 
 ````
 
@@ -311,7 +370,8 @@ node scripts/user-sync.js
 
 1. **登入 HCP 管理介面**
 2. **前往「事件服務」→「事件訂閱」**
-3. **設定 Webhook URL**：`https://您的域名/api/hcp/event-receiver`
+3. **設定 Webhook URL**：`https://您的域名/api/linebot/hcp-event-receiver`（推薦使用主要端點）
+   - 或使用向後兼容端點：`https://您的域名/api/hcp/event-receiver`
 4. **選擇要訂閱的事件類型**
 5. **啟用訂閱**
 
@@ -340,3 +400,79 @@ node scripts/user-sync.js
 - 👤 **197130**: 人臉識別匹配
 - 🌡️ **193**: 溫度異常
 - 🦺 **3089**: 安全設備檢測
+
+## 🔧 API 端點
+
+### 主要端點
+
+| 方法 | 端點                              | 說明                          |
+| ---- | --------------------------------- | ----------------------------- |
+| POST | `/webhook`                        | Line Bot Webhook（主要）      |
+| POST | `/api/linebot`                    | Line Bot API（主要）          |
+| POST | `/api/linebot/hcp-event-receiver` | 接收 HCP 事件推送（主要）     |
+| POST | `/api/hcp/event-receiver`         | 接收 HCP 事件推送（向後兼容） |
+| GET  | `/api/cleanup/status`             | 獲取清理服務狀態              |
+| POST | `/api/cleanup/manual`             | 手動觸發清理（臨時檔案）      |
+| GET  | `/health`                         | 健康檢查                      |
+
+## 🤖 Line Bot 指令
+
+### 基本指令
+
+- **版本** - 查看 HCP 平台版本資訊
+- **攝影機** - 查看攝影機列表
+- **擷圖 [ID]** - 擷取指定攝影機圖片
+- **幫助** - 顯示使用說明
+
+### 管理員指令（僅限管理員）
+
+- **管理** 或 **admin** - 開啟用戶管理面板
+  - 查看待審核用戶
+  - 管理現有用戶（管理員和通知目標）
+  - 透過 Flex Message 互動管理用戶權限
+
+## 🔐 安全建議
+
+1. ✅ 使用強密碼作為 `EVENT_TOKEN`
+2. ✅ 使用 HTTPS 作為 Webhook URL（生產環境）
+3. ✅ 不要將 `.env` 檔案提交到版本控制
+4. ✅ 定期更新依賴套件以修復安全漏洞
+5. ✅ 限制管理員權限，僅授予信任的用戶
+
+## 📦 專案結構
+
+```
+yscp-line-bot/
+├── app.js                    # 應用程式入口
+├── config.js                 # 配置檔案
+├── package.json              # 專案依賴
+├── ecosystem.config.js        # PM2 配置
+├── quick-start.sh            # 一鍵啟動腳本
+├── controllers/              # 控制器
+│   └── lineBotController.js
+├── routes/                   # 路由
+│   └── lineBot.js
+├── services/                 # 核心服務
+│   ├── fileSystemService.js  # 檔案系統服務（統一清理管理）
+│   ├── loggerService.js      # 日誌服務（自動清理和輪轉）
+│   ├── lineBotService.js     # Line Bot 服務
+│   ├── hcpClient.js          # HCP API 客戶端
+│   └── ...
+├── scripts/                  # 管理腳本
+│   ├── log-cleanup.js        # 日誌清理腳本
+│   └── user-sync.js          # 用戶同步腳本
+├── data/                     # 配置資料
+│   ├── event-history.json
+│   ├── event-types.json
+│   └── user-management.json
+├── logs/                     # 日誌檔案（自動清理，保留7天）
+├── temp/                     # 臨時圖片（自動清理，保留7天）
+└── .env                      # 環境變數（不提交到版本控制）
+```
+
+## 🛠️ 技術棧
+
+**後端**: Node.js + Express + Line Bot SDK + PM2  
+**日誌**: Winston  
+**進程管理**: PM2  
+**開發工具**: nodemon
