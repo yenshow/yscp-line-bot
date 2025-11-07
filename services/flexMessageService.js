@@ -186,7 +186,9 @@ class FlexMessageService {
 					const imageSources = event.imageSources || {};
 					const faceImage = imageSources.faceUrl || event?.data?.alarmResult?.faces?.URL || null;
 					const picUri = imageSources.picUri || event?.data?.picUri || null;
-					const targetUri = faceImage || picUri || null;
+					// 檢查事件層級的 eventPicUri（用於溫度等事件）
+					const eventPicUri = event.eventPicUri || event?.data?.eventPicUri || null;
+					const targetUri = faceImage || picUri || eventPicUri || null;
 
 					if (targetUri) {
 						try {
@@ -795,7 +797,7 @@ class FlexMessageService {
 	 * @returns {Object} Flex Message 物件
 	 */
 	createEncodeDeviceFlexMessage(devices, total, page = 1, pageSize = 10) {
-		const onlineDevices = devices.filter((device) => device.status === 2);
+		const onlineDevices = devices.filter((device) => device.status === 1);
 		const offlineCount = devices.length - onlineDevices.length;
 
 		// 如果沒有上線裝置，顯示提示訊息
@@ -854,7 +856,7 @@ class FlexMessageService {
 						spacing: "sm",
 						contents: [
 							this.createInfoRow("🆔 裝置ID:", device.encodeDevIndexCode),
-							this.createInfoRow("📡 狀態:", device.status === 2 ? "🟢 線上" : "🔴 離線"),
+							this.createInfoRow("📡 狀態:", device.status === 1 ? "🟢 線上" : "🔴 離線"),
 							this.createInfoRow("🌐 IP位址:", `${device.encodeDevIp}:${device.encodeDevPort}`)
 						]
 					}
@@ -1115,6 +1117,8 @@ class FlexMessageService {
 				return await this.createFaceMatchFlexMessage(eventData);
 			case "accessControl":
 				return await this.createAccessControlFlexMessage(eventData);
+			case "temperature":
+				return await this.createTemperatureEventFlexMessage(eventData);
 			default:
 				return await this.createGenericEventFlexMessage(eventData);
 		}
@@ -1152,8 +1156,10 @@ class FlexMessageService {
 		const faceImage = data?.alarmResult?.faces?.URL || null;
 		// 其次檢查一般圖片（與 createAccessControlFlexMessage 相同）
 		const picUri = data?.picUri || null;
+		// 檢查事件層級的 eventPicUri（用於溫度等事件）
+		const eventPicUri = eventData.eventPicUri || data?.eventPicUri || null;
 		// 選擇可用的圖片來源
-		const targetUri = faceImage || picUri;
+		const targetUri = faceImage || picUri || eventPicUri;
 
 		if (targetUri) {
 			try {
@@ -1218,6 +1224,79 @@ class FlexMessageService {
 				imageUrl = await this.fetchEventImage(faces.URL, "face_match", eventData.eventId);
 			} catch (error) {
 				LoggerService.error("取得人臉比對圖片失敗", error);
+			}
+		}
+
+		// 建立 FlexMessage 內容
+		const contents = [
+			this.createText("🚨 YSCP 系統警報", "xl", this.theme.colors.error, { weight: "bold" }),
+			{
+				type: "box",
+				layout: "vertical",
+				margin: "md",
+				spacing: "sm",
+				contents: [
+					this.createInfoRow("⏰ 時間:", timeString),
+					this.createInfoRow("🔖 事件類型:", this.getHCPClient().getEventTypeName(eventType)),
+					this.createInfoRow("📹 設備名稱:", srcName || "未知")
+				]
+			}
+		];
+
+		// 如果有圖片，添加圖片到 FlexMessage
+		if (imageUrl) {
+			contents.push({
+				type: "image",
+				url: imageUrl,
+				size: "full",
+				aspectRatio: "16:9",
+				aspectMode: "cover",
+				margin: "md"
+			});
+		}
+
+		const bubble = {
+			type: "bubble",
+			body: {
+				type: "box",
+				layout: "vertical",
+				contents: contents
+			}
+		};
+
+		const footer = imageUrl ? this.createResendImageFooter(eventData.eventId) : null;
+		if (footer) {
+			bubble.footer = footer;
+		}
+
+		return {
+			type: "flex",
+			altText: `YSCP 系統警報 - ${this.getHCPClient().getEventTypeName(eventType)} (${srcName})`,
+			contents: bubble
+		};
+	}
+
+	/**
+	 * 建立溫度事件的 FlexMessage
+	 * @param {Object} eventData - 完整的事件數據
+	 * @returns {Promise<Object>} FlexMessage 物件
+	 */
+	async createTemperatureEventFlexMessage(eventData) {
+		const { eventType, happenTime, data, srcName, srcType } = eventData;
+		const date = new Date(happenTime);
+		const timeString = date.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+
+		// 取得圖片資料
+		let imageUrl = null;
+		const eventPicUri = eventData.eventPicUri || data?.eventPicUri || null;
+		const picUri = data?.picUri || null;
+		const targetUri = eventPicUri || picUri;
+		if (targetUri) {
+			try {
+				// 使用事件ID進行去重
+				imageUrl = await this.fetchEventImage(targetUri, "temperature", eventData.eventId);
+			} catch (error) {
+				LoggerService.error("取得溫度事件圖片失敗", error);
 			}
 		}
 

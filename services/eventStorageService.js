@@ -82,7 +82,8 @@ class EventStorageService {
 			const history = this.loadHistoryData();
 			const imageSources = {
 				picUri: eventData?.data?.picUri || null,
-				faceUrl: eventData?.data?.alarmResult?.faces?.URL || null
+				faceUrl: eventData?.data?.alarmResult?.faces?.URL || null,
+				eventPicUri: eventData?.eventPicUri || eventData?.data?.eventPicUri || null
 			};
 
 			const candidate = eventData?.data?.alarmResult?.faces?.identify?.candidate || null;
@@ -104,7 +105,7 @@ class EventStorageService {
 				imageUrl: eventData.imageUrl || null
 			};
 
-			if (imageSources.picUri || imageSources.faceUrl) {
+			if (imageSources.picUri || imageSources.faceUrl || imageSources.eventPicUri) {
 				historyItem.imageSources = imageSources;
 			}
 
@@ -320,6 +321,9 @@ class EventStorageService {
 			if (imageSources.faceUrl) {
 				return imageSources.faceUrl;
 			}
+			if (imageSources.eventPicUri) {
+				return imageSources.eventPicUri;
+			}
 
 			const data = eventData.data || {};
 			if (data.picUri) {
@@ -327,6 +331,14 @@ class EventStorageService {
 			}
 			if (data?.alarmResult?.faces?.URL) {
 				return data.alarmResult.faces.URL;
+			}
+			if (data?.eventPicUri) {
+				return data.eventPicUri;
+			}
+
+			// 檢查事件層級的 eventPicUri
+			if (eventData.eventPicUri) {
+				return eventData.eventPicUri;
 			}
 
 			return null;

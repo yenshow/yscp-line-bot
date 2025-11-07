@@ -871,7 +871,11 @@ class LineBotService {
 					if (!imageUrl) {
 						let imageSource = EventStorageService.getEventImageUri(eventId);
 						if (!imageSource && eventData.data) {
-							imageSource = eventData.data.picUri || eventData.data?.alarmResult?.faces?.URL || null;
+							imageSource = eventData.data.picUri || eventData.data?.alarmResult?.faces?.URL || eventData.data?.eventPicUri || null;
+						}
+						// 如果還是沒有找到，檢查事件層級的 eventPicUri
+						if (!imageSource) {
+							imageSource = eventData.eventPicUri || null;
 						}
 
 						if (imageSource) {
