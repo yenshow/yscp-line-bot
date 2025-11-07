@@ -273,6 +273,60 @@ npm run start              # 重新啟動
 3. 測試服務：`curl http://localhost:6000/webhook/test`
 4. 手動同步用戶：`node scripts/user-sync.js`
 
+**Webhook 驗證失敗（400 Bad Request 或 502 Bad Gateway）**
+
+**問題 1：ngrok 端口配置錯誤（502 Bad Gateway）**
+
+如果 ngrok 顯示 `502 Bad Gateway` 錯誤，通常是 ngrok 轉發到錯誤的端口。
+
+**檢查方法：**
+
+```bash
+# 查看 ngrok 轉發配置
+curl http://localhost:4040/api/tunnels | grep -o '"addr":"[^"]*"'
+```
+
+**解決方案：**
+
+```bash
+# 1. 停止當前 ngrok
+pkill ngrok
+
+# 2. 確認應用程式運行在端口 6000
+curl http://localhost:6000/health
+
+# 3. 重新啟動 ngrok，使用正確的端口
+ngrok http 6000
+
+# 或使用 quick-start 腳本自動啟動
+npm run quick-start
+```
+
+**確認：** ngrok 應該顯示：`https://xxx.ngrok-free.dev -> http://localhost:6000`（不是 `localhost:80`）
+
+**問題 2：Line Bot 配置錯誤（400 Bad Request）**
+
+如果 Webhook 驗證返回 `400 Bad Request`，通常是 `LINE_CHANNEL_SECRET` 或 `LINE_CHANNEL_ACCESS_TOKEN` 配置錯誤。
+
+**檢查方法：**
+
+```bash
+# 使用檢查腳本診斷問題
+node scripts/check-webhook.js
+```
+
+**解決方案：**
+
+1. 確認 `.env` 檔案中的 `LINE_CHANNEL_SECRET` 與 Line Developers Console 中的完全一致
+   - `LINE_CHANNEL_SECRET` 應為 32 字元的十六進制字串
+   - 確認沒有多餘空格或換行
+2. 確認 `LINE_CHANNEL_ACCESS_TOKEN` 正確且未過期
+3. 確認 Webhook URL 正確設定：`https://您的ngrok域名/webhook`
+4. 重新載入環境變數並重啟服務：
+   ```bash
+   npm run restart
+   ```
+
 **無法接收事件**
 
 1. 檢查 HCP 管理介面中的事件訂閱設定
