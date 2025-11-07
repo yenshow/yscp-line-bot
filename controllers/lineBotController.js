@@ -66,12 +66,16 @@ class LineBotController {
 				});
 			}
 
-			const events = req.body.events;
+			const events = req.body?.events;
 
-			if (!events || !Array.isArray(events)) {
-				return res.status(400).json({
-					success: false,
-					error: "Invalid events format"
+			// LINE Platform 驗證請求時可能沒有 events 或 events 為空陣列
+			// 這種情況下應該返回 200 OK 而不是 400 Bad Request
+			if (!events || !Array.isArray(events) || events.length === 0) {
+				// 驗證請求或空事件，返回 200 OK
+				return res.status(200).json({
+					success: true,
+					message: "Webhook 驗證成功",
+					processedEvents: 0
 				});
 			}
 
