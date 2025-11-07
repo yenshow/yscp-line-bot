@@ -2,6 +2,7 @@
 
 ## 🎯 系統需求
 
+**支援平台**: Linux、macOS、Windows (透過 Git Bash 或 WSL)  
 **必要軟體**: Node.js 16+、npm、ngrok  
 **必要帳號**: HCP API 憑證、Line Bot 憑證
 
@@ -17,6 +18,38 @@
 brew install node
 brew install ngrok/ngrok/ngrok
 ngrok config add-authtoken YOUR_AUTHTOKEN
+
+# Linux 用戶可使用套件管理器
+# Ubuntu/Debian
+sudo apt update
+sudo apt install nodejs npm
+# 或使用 NodeSource 安裝最新版本
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 下載並安裝 ngrok
+wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+tar -xzf ngrok-v3-stable-linux-amd64.tgz
+sudo mv ngrok /usr/local/bin/
+ngrok config add-authtoken YOUR_AUTHTOKEN
+
+# CentOS/RHEL
+sudo yum install nodejs npm
+# 或使用 NodeSource
+curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+sudo yum install -y nodejs
+
+# Windows 用戶（推薦使用 Git Bash 或 WSL）
+# 方法 1: 使用 Git Bash（推薦）
+# 1. 下載並安裝 Git for Windows: https://git-scm.com/download/win
+# 2. 下載並安裝 Node.js: https://nodejs.org/
+# 3. 下載並安裝 ngrok: https://ngrok.com/download
+# 4. 在 Git Bash 中執行腳本
+
+# 方法 2: 使用 WSL (Windows Subsystem for Linux)
+# 1. 啟用 WSL: wsl --install
+# 2. 在 WSL 中按照 Linux 安裝步驟操作
+# 3. 在 WSL 中執行腳本
 ```
 
 ### 2. 一鍵啟動（推薦）

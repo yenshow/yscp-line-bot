@@ -57,24 +57,47 @@ sleep 5
 NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
 if [ -z "$NGROK_URL" ]; then
     echo "❌ 無法獲取 ngrok URL"
-    kill $NGROK_PID 2>/dev/null
+    kill $NGROK_PID 2>/dev/null || true
     exit 1
 fi
 
 WEBHOOK_URL="${NGROK_URL}/api/hcp/event-receiver"
-sed -i.bak "s|^WEBHOOK_URL=.*|WEBHOOK_URL=$WEBHOOK_URL|" .env
+# 跨平台兼容的 sed 命令（支援 Linux、macOS、Windows Git Bash/WSL）
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS 需要備份後綴
+    sed -i.bak "s|^WEBHOOK_URL=.*|WEBHOOK_URL=$WEBHOOK_URL|" .env
+    rm -f .env.bak
+else
+    # Linux / WSL / Windows Git Bash
+    sed -i "s|^WEBHOOK_URL=.*|WEBHOOK_URL=$WEBHOOK_URL|" .env
+fi
 echo "✅ ngrok 隧道已建立: $WEBHOOK_URL"
 
 # 啟動後端服務
 echo "🚀 啟動後端服務..."
-trap 'echo "🛑 停止所有服務..."; kill $NGROK_PID 2>/dev/null; npm run stop; exit 0' INT
+# 跨平台兼容的進程終止函數
+cleanup() {
+    echo "🛑 停止所有服務..."
+    kill $NGROK_PID 2>/dev/null || true
+    npm run stop
+    exit 0
+}
+trap cleanup INT
 
 npm start &
 sleep 5
 
 # 檢查服務狀態
-curl -s http://localhost:6000/health > /dev/null && echo "✅ 後端服務正常" || { echo "❌ 後端服務失敗"; kill $NGROK_PID; exit 1; }
-curl -s http://localhost:4040/api/tunnels > /dev/null && echo "✅ ngrok 隧道正常" || { echo "❌ ngrok 隧道失敗"; kill $NGROK_PID; exit 1; }
+curl -s http://localhost:6000/health > /dev/null && echo "✅ 後端服務正常" || { 
+    echo "❌ 後端服務失敗"
+    kill $NGROK_PID 2>/dev/null || true
+    exit 1
+}
+curl -s http://localhost:4040/api/tunnels > /dev/null && echo "✅ ngrok 隧道正常" || { 
+    echo "❌ ngrok 隧道失敗"
+    kill $NGROK_PID 2>/dev/null || true
+    exit 1
+}
 
 echo "🎉 服務已啟動！"
 echo "📋 服務資訊:"
