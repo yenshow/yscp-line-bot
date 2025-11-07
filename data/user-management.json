@@ -1,0 +1,19 @@
+{
+  "users": {
+    "Ufbea7bf3a458fcd1618d907664a038eb": {
+      "role": "admin",
+      "type": "user",
+      "addedAt": "2025-10-20T02:13:45.122Z",
+      "displayName": "蔡駿燿",
+      "pictureUrl": "https://sprofile.line-scdn.net/0hB7ER1rNBHRhoKwwbizdjZxh7HnJLWkQKREsCfl0vRnoGHAhJQh5ReFQoRi1VHFwaFxhSeg55FytkOGp-dn3hLG8bQClUElhMQUhT-g"
+    }
+  },
+  "pending": [],
+  "blocked": [],
+  "sync": {
+    "version": 1,
+    "lastFollowersSyncAt": "2025-10-30T03:52:14.435Z",
+    "source": "line"
+  },
+  "lastUpdated": "2025-10-31T03:20:40.555Z"
+}

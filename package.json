@@ -1,0 +1,40 @@
+{
+  "name": "hcp-line-bot-backend",
+  "version": "1.0.0",
+  "description": "HCP OpenAPI 整合 Line Bot 後端服務",
+  "main": "app.js",
+  "scripts": {
+    "start": "pm2 start ecosystem.config.js",
+    "dev": "nodemon app.js",
+    "quick-start": "./quick-start.sh",
+    "log-cleanup": "node scripts/log-cleanup.js",
+    "stop": "pm2 stop ecosystem.config.js",
+    "delete": "pm2 delete ecosystem.config.js",
+    "restart": "pm2 restart ecosystem.config.js",
+    "reload": "pm2 reload ecosystem.config.js",
+    "logs": "pm2 logs ecosystem.config.js",
+    "logs-app": "tail -f logs/app.log",
+    "logs-error": "tail -f logs/error.log",
+    "monitor": "pm2 monit",
+    "status": "pm2 status",
+    "reset": "pm2 delete ecosystem.config.js 2>/dev/null || true; sleep 1; pm2 start ecosystem.config.js; pm2 status"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@line/bot-sdk": "^7.5.2",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "socket.io": "^4.8.1",
+    "winston": "^3.11.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "pm2": "^6.0.13"
+  }
+}
