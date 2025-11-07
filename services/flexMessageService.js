@@ -1146,13 +1146,21 @@ class FlexMessageService {
 			}
 		];
 
-		// 檢查是否有圖片資料
+		// 檢查是否有圖片資料（與人臉門禁相同的處理邏輯）
 		let imageUrl = null;
-		if (data?.picUri) {
+		// 優先檢查人臉圖片（與 createFaceMatchFlexMessage 相同）
+		const faceImage = data?.alarmResult?.faces?.URL || null;
+		// 其次檢查一般圖片（與 createAccessControlFlexMessage 相同）
+		const picUri = data?.picUri || null;
+		// 選擇可用的圖片來源
+		const targetUri = faceImage || picUri;
+
+		if (targetUri) {
 			try {
 				// 使用事件ID進行去重
-				LoggerService.hcp(`正在取得一般事件圖片: ${data.picUri}`, eventData.eventId);
-				imageUrl = await this.fetchEventImage(data.picUri, "generic_event", eventData.eventId);
+				const imageType = faceImage ? "face_match" : "generic_event";
+				LoggerService.hcp(`正在取得一般事件圖片: ${targetUri}`, eventData.eventId);
+				imageUrl = await this.fetchEventImage(targetUri, imageType, eventData.eventId);
 			} catch (error) {
 				LoggerService.error("取得一般事件圖片失敗", error);
 			}
