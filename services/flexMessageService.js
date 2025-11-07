@@ -1125,299 +1125,160 @@ class FlexMessageService {
 	}
 
 	/**
+	 * 建立事件 FlexMessage 的通用基礎方法
+	 * 根據 HCP OpenAPI 規範，所有事件都遵循相同的通用處理原則
+	 * @param {Object} eventData - 完整的事件數據
+	 * @param {Object} options - 配置選項
+	 * @param {Function} options.getImageUri - 取得圖片 URI 的函數，符合 HCP 規範的事件數據結構
+	 * @param {string} options.imageType - 圖片類型標識，用於圖片處理和去重
+	 * @returns {Promise<Object>} FlexMessage 物件
+	 */
+	async createBaseEventFlexMessage(eventData, options = {}) {
+		const { eventType, happenTime, data, srcName, srcType } = eventData;
+		const date = new Date(happenTime);
+		const timeString = date.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+
+		// 取得圖片資料（根據 HCP 規範，圖片 URI 位於 data 欄位中）
+		let imageUrl = null;
+		const { getImageUri, imageType } = options;
+		if (getImageUri && typeof getImageUri === "function") {
+			const targetUri = getImageUri(eventData, data);
+			if (targetUri) {
+				try {
+					// 使用事件ID進行去重
+					imageUrl = await this.fetchEventImage(targetUri, imageType || "generic_event", eventData.eventId);
+				} catch (error) {
+					LoggerService.error(`取得${imageType || "事件"}圖片失敗`, error);
+				}
+			}
+		}
+
+		// 建立 FlexMessage 內容
+		const contents = [
+			this.createText("🚨 YSCP 系統警報", "xl", this.theme.colors.error, { weight: "bold" }),
+			{
+				type: "box",
+				layout: "vertical",
+				margin: "md",
+				spacing: "sm",
+				contents: [
+					this.createInfoRow("⏰ 時間:", timeString),
+					this.createInfoRow("🔖 事件類型:", this.getHCPClient().getEventTypeName(eventType)),
+					this.createInfoRow("📹 設備名稱:", srcName || "未知")
+				]
+			}
+		];
+
+		// 如果有圖片，添加圖片到 FlexMessage
+		if (imageUrl) {
+			contents.push({
+				type: "image",
+				url: imageUrl,
+				size: "full",
+				aspectRatio: "16:9",
+				aspectMode: "cover",
+				margin: "md"
+			});
+		}
+
+		const bubble = {
+			type: "bubble",
+			body: {
+				type: "box",
+				layout: "vertical",
+				contents: contents
+			}
+		};
+
+		const footer = imageUrl ? this.createResendImageFooter(eventData.eventId) : null;
+		if (footer) {
+			bubble.footer = footer;
+		}
+
+		return {
+			type: "flex",
+			altText: `YSCP 系統警報 - ${this.getHCPClient().getEventTypeName(eventType)} (${srcName})`,
+			contents: bubble
+		};
+	}
+
+	/**
 	 * 建立一般事件的 FlexMessage
+	 * 用於處理未分類的事件類型，包括 AIOP 事件 (3086) 等其他事件
+	 * 根據 HCP OpenAPI 規範：AIOP 事件為設備應用事件，data 欄位包含擴展信息
 	 * @param {Object} eventData - 完整的事件數據
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createGenericEventFlexMessage(eventData) {
-		const { eventType, happenTime, data, srcName, srcType } = eventData;
-		const date = new Date(happenTime);
-		const timeString = date.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
-
-		// 建立 FlexMessage 內容
-		const contents = [
-			this.createText("🚨 YSCP 系統警報", "xl", this.theme.colors.error, { weight: "bold" }),
-			{
-				type: "box",
-				layout: "vertical",
-				margin: "md",
-				spacing: "sm",
-				contents: [
-					this.createInfoRow("⏰ 時間:", timeString),
-					this.createInfoRow("🔖 事件類型:", this.getHCPClient().getEventTypeName(eventType)),
-					this.createInfoRow("📹 設備名稱:", srcName || "未知")
-				]
-			}
-		];
-
-		// 檢查是否有圖片資料（與人臉門禁相同的處理邏輯）
-		let imageUrl = null;
-		// 優先檢查人臉圖片（與 createFaceMatchFlexMessage 相同）
-		const faceImage = data?.alarmResult?.faces?.URL || null;
-		// 其次檢查一般圖片（與 createAccessControlFlexMessage 相同）
-		const picUri = data?.picUri || null;
-		// 檢查事件層級的 eventPicUri（用於溫度等事件）
-		const eventPicUri = eventData.eventPicUri || data?.eventPicUri || null;
-		// 選擇可用的圖片來源
-		const targetUri = faceImage || picUri || eventPicUri;
-
-		if (targetUri) {
-			try {
-				// 使用事件ID進行去重
-				const imageType = faceImage ? "face_match" : "generic_event";
-				LoggerService.hcp(`正在取得一般事件圖片: ${targetUri}`, eventData.eventId);
-				imageUrl = await this.fetchEventImage(targetUri, imageType, eventData.eventId);
-			} catch (error) {
-				LoggerService.error("取得一般事件圖片失敗", error);
-			}
-		}
-
-		// 如果有圖片，添加圖片到 FlexMessage
-		if (imageUrl) {
-			contents.push({
-				type: "image",
-				url: imageUrl,
-				size: "full",
-				aspectRatio: "16:9",
-				aspectMode: "cover",
-				margin: "md"
-			});
-		}
-
-		const bubble = {
-			type: "bubble",
-			body: {
-				type: "box",
-				layout: "vertical",
-				contents: contents
-			}
-		};
-
-		const footer = imageUrl ? this.createResendImageFooter(eventData.eventId) : null;
-		if (footer) {
-			bubble.footer = footer;
-		}
-
-		return {
-			type: "flex",
-			altText: `YSCP 系統警報 - ${this.getHCPClient().getEventTypeName(eventType)} (${srcName})`,
-			contents: bubble
-		};
+		return await this.createBaseEventFlexMessage(eventData, {
+			getImageUri: (eventData, data) => {
+				// 根據 HCP 規範，嘗試多種可能的圖片來源
+				// 優先檢查人臉圖片（Face Picture Comparison Event Message 格式）
+				const faceImage = data?.alarmResult?.faces?.URL || null;
+				// 其次檢查門禁圖片（Access Control Event Message 格式）
+				const picUri = data?.picUri || null;
+				// 檢查事件層級的 eventPicUri（用於溫度等警報事件）
+				const eventPicUri = eventData.eventPicUri || data?.eventPicUri || null;
+				// 選擇可用的圖片來源
+				return faceImage || picUri || eventPicUri || null;
+			},
+			imageType: "generic_event"
+		});
 	}
 
 	/**
 	 * 建立人臉比對事件的 FlexMessage
+	 * 根據 HCP OpenAPI 規範：事件代碼 131659，使用 Face Picture Comparison Event Message 格式
+	 * 圖片 URI 位於 data.alarmResult.faces.URL
 	 * @param {Object} eventData - 完整的事件數據
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createFaceMatchFlexMessage(eventData) {
-		const { eventType, happenTime, data, srcName, srcType } = eventData;
-		const date = new Date(happenTime);
-		const timeString = date.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
-
-		// 取得圖片資料
-		let imageUrl = null;
-		const faces = data.alarmResult?.faces;
-		if (faces?.URL) {
-			try {
-				// 使用事件ID進行去重
-				imageUrl = await this.fetchEventImage(faces.URL, "face_match", eventData.eventId);
-			} catch (error) {
-				LoggerService.error("取得人臉比對圖片失敗", error);
-			}
-		}
-
-		// 建立 FlexMessage 內容
-		const contents = [
-			this.createText("🚨 YSCP 系統警報", "xl", this.theme.colors.error, { weight: "bold" }),
-			{
-				type: "box",
-				layout: "vertical",
-				margin: "md",
-				spacing: "sm",
-				contents: [
-					this.createInfoRow("⏰ 時間:", timeString),
-					this.createInfoRow("🔖 事件類型:", this.getHCPClient().getEventTypeName(eventType)),
-					this.createInfoRow("📹 設備名稱:", srcName || "未知")
-				]
-			}
-		];
-
-		// 如果有圖片，添加圖片到 FlexMessage
-		if (imageUrl) {
-			contents.push({
-				type: "image",
-				url: imageUrl,
-				size: "full",
-				aspectRatio: "16:9",
-				aspectMode: "cover",
-				margin: "md"
-			});
-		}
-
-		const bubble = {
-			type: "bubble",
-			body: {
-				type: "box",
-				layout: "vertical",
-				contents: contents
-			}
-		};
-
-		const footer = imageUrl ? this.createResendImageFooter(eventData.eventId) : null;
-		if (footer) {
-			bubble.footer = footer;
-		}
-
-		return {
-			type: "flex",
-			altText: `YSCP 系統警報 - ${this.getHCPClient().getEventTypeName(eventType)} (${srcName})`,
-			contents: bubble
-		};
+		return await this.createBaseEventFlexMessage(eventData, {
+			getImageUri: (eventData, data) => {
+				// 根據 HCP 規範：Face Picture Comparison Event Message
+				// 圖片位於 alarmResult.faces.URL
+				const faces = data?.alarmResult?.faces;
+				return faces?.URL || null;
+			},
+			imageType: "face_match"
+		});
 	}
 
 	/**
 	 * 建立溫度事件的 FlexMessage
+	 * 根據 HCP OpenAPI 規範：事件代碼 192517，使用通用警報結構
+	 * 圖片 URI 位於事件記錄的 eventPicUri 欄位中
 	 * @param {Object} eventData - 完整的事件數據
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createTemperatureEventFlexMessage(eventData) {
-		const { eventType, happenTime, data, srcName, srcType } = eventData;
-		const date = new Date(happenTime);
-		const timeString = date.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
-
-		// 取得圖片資料
-		let imageUrl = null;
-		const eventPicUri = eventData.eventPicUri || data?.eventPicUri || null;
-		const picUri = data?.picUri || null;
-		const targetUri = eventPicUri || picUri;
-		if (targetUri) {
-			try {
-				// 使用事件ID進行去重
-				imageUrl = await this.fetchEventImage(targetUri, "temperature", eventData.eventId);
-			} catch (error) {
-				LoggerService.error("取得溫度事件圖片失敗", error);
-			}
-		}
-
-		// 建立 FlexMessage 內容
-		const contents = [
-			this.createText("🚨 YSCP 系統警報", "xl", this.theme.colors.error, { weight: "bold" }),
-			{
-				type: "box",
-				layout: "vertical",
-				margin: "md",
-				spacing: "sm",
-				contents: [
-					this.createInfoRow("⏰ 時間:", timeString),
-					this.createInfoRow("🔖 事件類型:", this.getHCPClient().getEventTypeName(eventType)),
-					this.createInfoRow("📹 設備名稱:", srcName || "未知")
-				]
-			}
-		];
-
-		// 如果有圖片，添加圖片到 FlexMessage
-		if (imageUrl) {
-			contents.push({
-				type: "image",
-				url: imageUrl,
-				size: "full",
-				aspectRatio: "16:9",
-				aspectMode: "cover",
-				margin: "md"
-			});
-		}
-
-		const bubble = {
-			type: "bubble",
-			body: {
-				type: "box",
-				layout: "vertical",
-				contents: contents
-			}
-		};
-
-		const footer = imageUrl ? this.createResendImageFooter(eventData.eventId) : null;
-		if (footer) {
-			bubble.footer = footer;
-		}
-
-		return {
-			type: "flex",
-			altText: `YSCP 系統警報 - ${this.getHCPClient().getEventTypeName(eventType)} (${srcName})`,
-			contents: bubble
-		};
+		return await this.createBaseEventFlexMessage(eventData, {
+			getImageUri: (eventData, data) => {
+				// 根據 HCP 規範：溫度警報的圖片位於事件記錄的 eventPicUri
+				// 優先檢查事件層級的 eventPicUri，其次檢查 data 內的 picUri
+				return eventData.eventPicUri || data?.eventPicUri || data?.picUri || null;
+			},
+			imageType: "temperature"
+		});
 	}
 
 	/**
 	 * 建立門禁事件的 FlexMessage
+	 * 根據 HCP OpenAPI 規範：事件代碼 196893，使用 Access Control Event Message 格式
+	 * 圖片 URI 位於 data.picUri
 	 * @param {Object} eventData - 完整的事件數據
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createAccessControlFlexMessage(eventData) {
-		const { eventType, happenTime, data, srcName, srcType } = eventData;
-		const date = new Date(happenTime);
-		const timeString = date.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
-
-		// 建立 FlexMessage 內容
-		const contents = [
-			this.createText("🚨 YSCP 系統警報", "xl", this.theme.colors.error, { weight: "bold" }),
-			{
-				type: "box",
-				layout: "vertical",
-				margin: "md",
-				spacing: "sm",
-				contents: [
-					this.createInfoRow("⏰ 時間:", timeString),
-					this.createInfoRow("🔖 事件類型:", this.getHCPClient().getEventTypeName(eventType)),
-					this.createInfoRow("📹 設備名稱:", srcName || "未知")
-				]
-			}
-		];
-
-		// 檢查是否有圖片資料
-		let imageUrl = null;
-		if (data.picUri) {
-			try {
-				// 使用事件ID進行去重
-				LoggerService.hcp(`正在取得門禁事件圖片: ${data.picUri}`, eventData.eventId);
-				imageUrl = await this.fetchEventImage(data.picUri, "access_control", eventData.eventId);
-			} catch (error) {
-				LoggerService.error("取得門禁事件圖片失敗", error);
-			}
-		}
-
-		// 如果有圖片，添加圖片到 FlexMessage
-		if (imageUrl) {
-			contents.push({
-				type: "image",
-				url: imageUrl,
-				size: "full",
-				aspectRatio: "16:9",
-				aspectMode: "cover",
-				margin: "md"
-			});
-		}
-
-		const bubble = {
-			type: "bubble",
-			body: {
-				type: "box",
-				layout: "vertical",
-				contents: contents
-			}
-		};
-
-		const footer = imageUrl ? this.createResendImageFooter(eventData.eventId) : null;
-		if (footer) {
-			bubble.footer = footer;
-		}
-
-		return {
-			type: "flex",
-			altText: `YSCP 系統警報 - ${this.getHCPClient().getEventTypeName(eventType)} (${srcName})`,
-			contents: bubble
-		};
+		return await this.createBaseEventFlexMessage(eventData, {
+			getImageUri: (eventData, data) => {
+				// 根據 HCP 規範：Access Control Event Message
+				// 圖片位於 data.picUri
+				return data?.picUri || null;
+			},
+			imageType: "access_control"
+		});
 	}
 
 	/**
