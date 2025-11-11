@@ -60,12 +60,6 @@ app.use("/temp", express.static(path.join(__dirname, "temp")));
 // 路由
 app.use("/webhook", lineBotRoutes);
 app.use("/api/linebot", lineBotRoutes);
-// HCP 事件接收端點（向後兼容）
-app.post("/api/hcp/event-receiver", (req, res) => {
-	const LineBotController = require("./controllers/lineBotController");
-	const lineBotController = new LineBotController();
-	lineBotController.handleEventReceiver(req, res);
-});
 
 // 根路由
 app.get("/", (req, res) => {
