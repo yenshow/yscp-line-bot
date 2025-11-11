@@ -1239,7 +1239,17 @@ class FlexMessageService {
 			try {
 				eventData._quickQueried = true; // 避免重複查
 				const hcp = this.getHCPClient();
-				const res = await hcp.getEventRecords({ eventIndexCode: eventData.eventId, pageNo: 1, pageSize: 1 });
+				const res = await hcp.getEventRecords({
+					eventIndexCode: eventData.eventId,
+					pageNo: 1,
+					pageSize: 1,
+					srcType: eventData.srcType,
+					srcIndex: String(eventData.srcIndex || ""),
+					startTime: new Date(new Date(eventData.happenTime).getTime() - 60 * 60 * 1000).toISOString(),
+					endTime: new Date(new Date(eventData.happenTime).getTime() + 60 * 60 * 1000).toISOString(),
+					sortField: "TriggeringTime",
+					orderType: 1
+				});
 				if (res && res.code === "0" && res.data?.list?.length) {
 					const first = res.data.list[0];
 					eventData.eventPicUri =
