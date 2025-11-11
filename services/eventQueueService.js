@@ -174,9 +174,7 @@ class EventQueueService {
 			LoggerService.hcp(`[EVENT_QUEUE] 處理事件開始 eventId=${eventItem.data?.eventId}`);
 			this.processEventItem(eventItem).finally(() => {
 				this.processingCount--;
-				LoggerService.hcp(
-					`[EVENT_QUEUE] 處理事件結束 eventId=${eventItem.data?.eventId} currentProcessing=${this.processingCount}`
-				);
+				LoggerService.hcp(`[EVENT_QUEUE] 處理事件結束 eventId=${eventItem.data?.eventId} currentProcessing=${this.processingCount}`);
 			});
 		}
 
@@ -299,7 +297,7 @@ class EventQueueService {
 
 		const params = {
 			pageNo: 1,
-			pageSize: 3,
+			pageSize: 1,
 			sortField: "TriggeringTime",
 			orderType: 1
 		};
@@ -309,7 +307,7 @@ class EventQueueService {
 		}
 
 		if (eventType != null) {
-			params.eventTypes = String(eventType);
+			params.eventType = String(eventType);
 		}
 
 		if (eventData?.srcType) {
@@ -317,7 +315,7 @@ class EventQueueService {
 		}
 
 		if (eventData?.srcIndex) {
-			params.srcIndexs = Array.isArray(eventData.srcIndex) ? eventData.srcIndex : [eventData.srcIndex];
+			params.srcIndex = String(eventData.srcIndex);
 		}
 
 		if (eventData?.happenTime) {
