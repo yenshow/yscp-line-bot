@@ -1234,11 +1234,30 @@ class FlexMessageService {
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createVssEventFlexMessage(eventData) {
+		// 若事件本身沒有圖片，嘗試即時查詢 eventRecord 取第一張圖，避免依賴佇列 enrich 流程
+		if (!eventData.eventPicUri && !this.hasFetchedByRecord) {
+			try {
+				const hcp = this.getHCPClient();
+				const query = {
+					eventIndexCode: eventData.eventId,
+					srcType: eventData.srcType,
+					srcIndex: eventData.srcIndex,
+					pageNo: 1,
+					pageSize: 1
+				};
+				const res = await hcp.getEventRecords(query);
+				if (res && res.code === "0" && res.data?.list?.length) {
+					const uri = res.data.list[0].eventPicUri || null;
+					if (uri) eventData.eventPicUri = uri;
+				}
+			} catch (err) {
+				LoggerService.warn("即時查詢 eventRecord 取得圖片失敗", err);
+			}
+		}
+
 		return await this.createBaseEventFlexMessage(eventData, {
 			getImageUri: (eventData, data) => {
-				if (eventData.eventPicUri) {
-					return eventData.eventPicUri;
-				}
+				if (eventData.eventPicUri) return eventData.eventPicUri;
 				return data?.eventPicUri || data?.picUri || data?.alarmResult?.faces?.URL || null;
 			},
 			imageType: "event_vss"
