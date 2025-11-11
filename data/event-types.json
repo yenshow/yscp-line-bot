@@ -2,49 +2,49 @@
   "eventTypes": {
     "3086": {
       "name": "未穿反光背心/未戴安全帽",
-      "category": "aiop",
+      "ability": "event_vss",
       "enabled": true,
       "priority": "high"
     },
     "3089": {
       "name": "沒戴安全帽或背心",
-      "category": "aiop",
+      "ability": "event_vss",
       "enabled": true,
       "priority": "high"
     },
     "131659": {
       "name": "即時比對結果",
-      "category": "faceMatch",
+      "ability": "event_face_match",
       "enabled": false,
       "priority": "medium"
     },
     "192517": {
       "name": "溫度警報",
-      "category": "temperature",
+      "ability": "event_vss",
       "enabled": true,
       "priority": "high"
     },
     "196893": {
       "name": "人臉辨識成功",
-      "category": "accessControl",
+      "ability": "event_acs",
       "enabled": false,
       "priority": "medium"
     },
     "197127": {
       "name": "指紋辨識成功",
-      "category": "accessControl",
+      "ability": "event_acs",
       "enabled": false,
       "priority": "medium"
     },
     "197128": {
       "name": "指紋辨識失敗",
-      "category": "accessControl",
+      "ability": "event_acs",
       "enabled": true,
       "priority": "medium"
     },
     "197151": {
       "name": "人臉辨識失敗",
-      "category": "accessControl",
+      "ability": "event_acs",
       "enabled": false,
       "priority": "medium"
     }
@@ -53,6 +53,6 @@
     "autoSubscribeNewTypes": true,
     "maxRetryAttempts": 3
   },
-  "lastUpdated": "2025-10-20T12:00:00.000Z",
+  "lastUpdated": "2025-11-11T12:00:00.000Z",
   "version": "2.0.0"
 }

@@ -1091,14 +1091,40 @@ class FlexMessageService {
 	// ========== 事件 FlexMessage 相關方法 ==========
 
 	/**
-	 * 取得事件分類
-	 * @param {number} eventType - 事件類型
-	 * @returns {string} 事件分類
+	 * 取得事件 ability，若缺失則回退至舊欄位或預設值
+	 * @param {Object} eventData - 事件資料
+	 * @returns {string|null} ability 值
 	 */
-	getEventCategory(eventType) {
+	getEventAbility(eventData) {
+		const eventType = eventData?.eventType;
+		const abilityFromEvent = eventData?.ability || null;
+
+		if (abilityFromEvent) {
+			return abilityFromEvent;
+		}
+
 		const hcpClient = this.getHCPClient();
-		const eventConfig = hcpClient.getEventTypeConfig(eventType);
-		return eventConfig?.category || "generic";
+		const eventConfig = eventType != null ? hcpClient.getEventTypeConfig(eventType) : null;
+
+		if (eventConfig?.ability) {
+			return eventConfig.ability;
+		}
+
+		// 舊欄位向後相容
+		if (eventConfig?.category) {
+			switch (eventConfig.category) {
+				case "faceMatch":
+					return "event_face_match";
+				case "accessControl":
+					return "event_acs";
+				case "temperature":
+					return "event_vss";
+				default:
+					break;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -1107,21 +1133,32 @@ class FlexMessageService {
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createEventFlexMessage(eventData) {
-		const { eventType, happenTime, data, srcName, srcType } = eventData;
+		const { eventType } = eventData;
+		const ability = this.getEventAbility(eventData);
+		const eventTypeStr = String(eventType);
 
-		// 根據事件分類選擇對應的 FlexMessage 創建方法
-		const eventCategory = this.getEventCategory(eventType);
-
-		switch (eventCategory) {
-			case "faceMatch":
-				return await this.createFaceMatchFlexMessage(eventData);
-			case "accessControl":
-				return await this.createAccessControlFlexMessage(eventData);
-			case "temperature":
-				return await this.createTemperatureEventFlexMessage(eventData);
-			default:
-				return await this.createGenericEventFlexMessage(eventData);
+		if (ability === "event_face_match") {
+			return await this.createFaceMatchFlexMessage(eventData);
 		}
+
+		if (ability === "event_acs") {
+			return await this.createAccessControlFlexMessage(eventData);
+		}
+
+		if (ability === "event_vss") {
+			// 溫度事件仍使用專用模板
+			if (eventTypeStr === "192517") {
+				return await this.createTemperatureEventFlexMessage(eventData);
+			}
+			return await this.createGenericEventFlexMessage(eventData);
+		}
+
+		// 向後相容：若 ability 缺失但事件類型為溫度警報，仍使用專用模板
+		if (eventTypeStr === "192517") {
+			return await this.createTemperatureEventFlexMessage(eventData);
+		}
+
+		return await this.createGenericEventFlexMessage(eventData);
 	}
 
 	/**

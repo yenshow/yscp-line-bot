@@ -212,6 +212,28 @@ class HCPClient {
 		}
 	}
 
+	/**
+	 * 查詢事件紀錄
+	 * @param {Object} params - 查詢參數
+	 * @returns {Promise<Object>} 事件紀錄查詢結果
+	 */
+	async getEventRecords(params = {}) {
+		try {
+			const endpoint = `/artemis/api/eventService/v1/eventRecords/page`;
+			LoggerService.hcp(`查詢事件紀錄: ${JSON.stringify(params)}`);
+
+			const result = await this.request(endpoint, params);
+			return result;
+		} catch (error) {
+			LoggerService.error("HCP getEventRecords API 調用失敗", error);
+			return {
+				code: "-1",
+				msg: `API 調用失敗: ${error.message}`,
+				data: null
+			};
+		}
+	}
+
 	// ========== 事件訂閱相關 API ==========
 
 	/**
