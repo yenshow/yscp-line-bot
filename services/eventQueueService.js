@@ -243,6 +243,7 @@ class EventQueueService {
 				...eventData,
 				storedAt: Date.now()
 			};
+			LoggerService.debug(`[EVENT_HISTORY] 寫入歷史 eventId=${eventData.eventId} image=${storedEvent.imageUrl || storedEvent?.data?.eventPicUri || "none"}`);
 			EventStorageService.appendEventToHistory(storedEvent);
 		}
 
@@ -341,16 +342,20 @@ class EventQueueService {
 	async enrichEventData(eventData) {
 		try {
 			const ability = this.resolveAbility(eventData);
+			LoggerService.debug(`[EVENT_ENRICH] ability=${ability || "null"} eventId=${eventData?.eventId}`);
 			if (ability !== "event_vss") {
+				LoggerService.debug("[EVENT_ENRICH] 非 event_vss 事件，略過");
 				return;
 			}
 
 			if (this.hasEventImage(eventData)) {
+				LoggerService.debug("[EVENT_ENRICH] 事件已包含圖片來源，略過查詢");
 				return;
 			}
 
 			const query = this.buildEventRecordQuery(eventData);
 			if (!query) {
+				LoggerService.debug("[EVENT_ENRICH] 無法組成事件紀錄查詢參數");
 				return;
 			}
 
