@@ -157,29 +157,32 @@ class EventQueueService {
 		LoggerService.hcp("[EVENT_QUEUE] startProcessing");
 		this.isProcessing = true;
 		this.cleanupProcessedEvents();
+		try {
+			while (this.hasEventsToProcess()) {
+				if (this.processingCount >= this.maxConcurrent) {
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+					continue;
+				}
 
-		while (this.hasEventsToProcess()) {
-			if (this.processingCount >= this.maxConcurrent) {
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-				continue;
+				const eventItem = this.getNextEvent();
+				if (!eventItem) {
+					LoggerService.hcp("[EVENT_QUEUE] 沒有事件待處理，結束循環");
+					break;
+				}
+
+				this.processingCount++;
+				LoggerService.hcp(`[EVENT_QUEUE] 處理事件開始 eventId=${eventItem.data?.eventId}`);
+				this.processEventItem(eventItem).finally(() => {
+					this.processingCount--;
+					LoggerService.hcp(`[EVENT_QUEUE] 處理事件結束 eventId=${eventItem.data?.eventId} currentProcessing=${this.processingCount}`);
+				});
 			}
-
-			const eventItem = this.getNextEvent();
-			if (!eventItem) {
-				LoggerService.hcp("[EVENT_QUEUE] 沒有事件待處理，結束循環");
-				break;
-			}
-
-			this.processingCount++;
-			LoggerService.hcp(`[EVENT_QUEUE] 處理事件開始 eventId=${eventItem.data?.eventId}`);
-			this.processEventItem(eventItem).finally(() => {
-				this.processingCount--;
-				LoggerService.hcp(`[EVENT_QUEUE] 處理事件結束 eventId=${eventItem.data?.eventId} currentProcessing=${this.processingCount}`);
-			});
+		} catch (error) {
+			LoggerService.error("[EVENT_QUEUE] 佇列處理致命錯誤", error);
+		} finally {
+			this.isProcessing = false;
+			LoggerService.hcp("[EVENT_QUEUE] 處理流程結束");
 		}
-
-		this.isProcessing = false;
-		LoggerService.hcp("[EVENT_QUEUE] 處理流程結束");
 	}
 
 	/**
