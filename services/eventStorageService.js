@@ -194,6 +194,36 @@ class EventStorageService {
 		}
 	}
 
+	updateEventData(eventId, updates = {}) {
+		if (!eventId || !updates || typeof updates !== "object") {
+			return;
+		}
+
+		const current = this.eventStorage.get(eventId);
+		if (!current) {
+			return;
+		}
+
+		const dataUpdates = updates.data && typeof updates.data === "object" ? updates.data : null;
+		const mergedData = {
+			...(current.data || {})
+		};
+		if (dataUpdates) {
+			Object.assign(mergedData, dataUpdates);
+		}
+
+		const mergedEvent = {
+			...current,
+			...updates
+		};
+
+		if (dataUpdates) {
+			mergedEvent.data = mergedData;
+		}
+
+		this.eventStorage.set(eventId, mergedEvent);
+	}
+
 	updateEventImage(eventId, imageUrl) {
 		if (!eventId || !imageUrl) {
 			return;

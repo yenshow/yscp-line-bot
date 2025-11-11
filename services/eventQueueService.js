@@ -243,7 +243,7 @@ class EventQueueService {
 				...eventData,
 				storedAt: Date.now()
 			};
-			LoggerService.debug(`[EVENT_HISTORY] 寫入歷史 eventId=${eventData.eventId} image=${storedEvent.imageUrl || storedEvent?.data?.eventPicUri || "none"}`);
+			LoggerService.hcp(`[EVENT_HISTORY] 寫入歷史 eventId=${eventData.eventId} image=${storedEvent.imageUrl || storedEvent?.data?.eventPicUri || "none"}`);
 			EventStorageService.appendEventToHistory(storedEvent);
 		}
 
@@ -342,33 +342,33 @@ class EventQueueService {
 	async enrichEventData(eventData) {
 		try {
 			const ability = this.resolveAbility(eventData);
-			LoggerService.debug(`[EVENT_ENRICH] ability=${ability || "null"} eventId=${eventData?.eventId}`);
+			LoggerService.hcp(`[EVENT_ENRICH] ability=${ability || "null"} eventId=${eventData?.eventId}`);
 			if (ability !== "event_vss") {
-				LoggerService.debug("[EVENT_ENRICH] 非 event_vss 事件，略過");
+				LoggerService.hcp("[EVENT_ENRICH] 非 event_vss 事件，略過");
 				return;
 			}
 
 			if (this.hasEventImage(eventData)) {
-				LoggerService.debug("[EVENT_ENRICH] 事件已包含圖片來源，略過查詢");
+				LoggerService.hcp("[EVENT_ENRICH] 事件已包含圖片來源，略過查詢");
 				return;
 			}
 
 			const query = this.buildEventRecordQuery(eventData);
 			if (!query) {
-				LoggerService.debug("[EVENT_ENRICH] 無法組成事件紀錄查詢參數");
+				LoggerService.hcp("[EVENT_ENRICH] 無法組成事件紀錄查詢參數");
 				return;
 			}
 
-			LoggerService.debug(`[EVENT_ENRICH] 查詢事件紀錄參數: ${JSON.stringify(query)}`);
+			LoggerService.hcp(`[EVENT_ENRICH] 查詢事件紀錄參數: ${JSON.stringify(query)}`);
 			const result = await this.hcpClient.getEventRecords(query);
 			if (!result || result.code !== "0" || !result.data || !Array.isArray(result.data.list) || !result.data.list.length) {
-				LoggerService.debug("[EVENT_ENRICH] 事件紀錄查詢沒有找到對應資料");
+				LoggerService.hcp("[EVENT_ENRICH] 事件紀錄查詢沒有找到對應資料");
 				return;
 			}
 
 			const picUri = this.extractEventPicUri(result.data.list[0]);
 			if (!picUri) {
-				LoggerService.debug("[EVENT_ENRICH] 事件紀錄沒有找到圖片 URI");
+				LoggerService.hcp("[EVENT_ENRICH] 事件紀錄沒有找到圖片 URI");
 				return;
 			}
 
@@ -377,7 +377,11 @@ class EventQueueService {
 				eventData.data = {};
 			}
 			eventData.data.eventPicUri = eventData.data.eventPicUri || picUri;
-			LoggerService.debug(`[EVENT_ENRICH] 補齊事件圖片成功 eventId=${eventData.eventId}`);
+			EventStorageService.updateEventData(eventData.eventId, {
+				eventPicUri: picUri,
+				data: { eventPicUri: picUri }
+			});
+			LoggerService.hcp(`[EVENT_ENRICH] 補齊事件圖片成功 eventId=${eventData.eventId}`);
 		} catch (error) {
 			LoggerService.warn("補齊 event_vss 事件圖片失敗", error);
 		}
