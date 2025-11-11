@@ -7,6 +7,7 @@ const LoggerService = require("./loggerService");
 const FlexMessageService = require("./flexMessageService");
 const EventStorageService = require("./eventStorageService");
 const configService = require("./configService");
+const HCPClient = require("./hcpClient");
 
 class EventQueueService {
 	constructor() {
@@ -28,6 +29,9 @@ class EventQueueService {
 		// 服務依賴
 		this.lineBotClient = null;
 		this.flexMessageService = null;
+		this.hcpClient = HCPClient.getInstance();
+
+		this.eventRecordLookupWindowMs = 5 * 60 * 1000; // 5 分鐘查詢範圍
 
 		// 定時清理機制
 		this.cleanupInterval = null;
@@ -92,9 +96,7 @@ class EventQueueService {
 	 * @returns {string} 優先級 ('high' 或 'normal')
 	 */
 	calculateEventPriority(eventData) {
-		const HCPClient = require("./hcpClient");
-		const hcpClient = HCPClient.getInstance();
-		const eventConfig = hcpClient.getEventTypeConfig(eventData.eventType);
+		const eventConfig = this.hcpClient.getEventTypeConfig(eventData.eventType);
 
 		if (eventConfig && eventConfig.priority) {
 			return eventConfig.priority === "medium" ? "normal" : eventConfig.priority;
@@ -194,6 +196,7 @@ class EventQueueService {
 	 */
 	async processEvent(eventData) {
 		try {
+			await this.enrichEventData(eventData);
 			await this.enforceRateLimit();
 			return await this.sendEventNotification(eventData);
 		} catch (error) {
@@ -259,6 +262,116 @@ class EventQueueService {
 		}
 
 		this.lastSendTime = Date.now();
+	}
+
+	resolveAbility(eventData) {
+		if (eventData?.ability) {
+			return eventData.ability;
+		}
+
+		const config = this.hcpClient.getEventTypeConfig(eventData?.eventType);
+		return config?.ability || null;
+	}
+
+	hasEventImage(eventData) {
+		return !!eventData?.eventPicUri || !!eventData?.data?.eventPicUri || !!eventData?.data?.picUri || !!eventData?.data?.alarmResult?.faces?.URL;
+	}
+
+	buildEventRecordQuery(eventData) {
+		const eventId = eventData?.eventId;
+		const eventType = eventData?.eventType;
+
+		if (!eventId && eventType == null) {
+			return null;
+		}
+
+		const params = {
+			pageNo: 1,
+			pageSize: 3,
+			sortField: "TriggeringTime",
+			orderType: 1
+		};
+
+		if (eventId) {
+			params.eventIndexCode = eventId;
+		}
+
+		if (eventType != null) {
+			params.eventTypes = String(eventType);
+		}
+
+		if (eventData?.srcType) {
+			params.srcType = eventData.srcType;
+		}
+
+		if (eventData?.srcIndex) {
+			params.srcIndexs = Array.isArray(eventData.srcIndex) ? eventData.srcIndex : [eventData.srcIndex];
+		}
+
+		if (eventData?.happenTime) {
+			const happenAt = new Date(eventData.happenTime);
+			if (!Number.isNaN(happenAt.getTime())) {
+				params.startTime = new Date(happenAt.getTime() - this.eventRecordLookupWindowMs).toISOString();
+				params.endTime = new Date(happenAt.getTime() + this.eventRecordLookupWindowMs).toISOString();
+			}
+		}
+
+		return params;
+	}
+
+	extractEventPicUri(record) {
+		if (!record) {
+			return null;
+		}
+
+		if (record.eventPicUri) {
+			return record.eventPicUri;
+		}
+
+		if (Array.isArray(record.eventPicList)) {
+			const item = record.eventPicList.find((entry) => entry?.eventPicUri);
+			if (item) {
+				return item.eventPicUri;
+			}
+		}
+
+		return null;
+	}
+
+	async enrichEventData(eventData) {
+		try {
+			const ability = this.resolveAbility(eventData);
+			if (ability !== "event_vss") {
+				return;
+			}
+
+			if (this.hasEventImage(eventData)) {
+				return;
+			}
+
+			const query = this.buildEventRecordQuery(eventData);
+			if (!query) {
+				return;
+			}
+
+			const result = await this.hcpClient.getEventRecords(query);
+			if (!result || result.code !== "0" || !result.data || !Array.isArray(result.data.list) || !result.data.list.length) {
+				return;
+			}
+
+			const picUri = this.extractEventPicUri(result.data.list[0]);
+			if (!picUri) {
+				return;
+			}
+
+			eventData.eventPicUri = picUri;
+			if (!eventData.data) {
+				eventData.data = {};
+			}
+			eventData.data.eventPicUri = eventData.data.eventPicUri || picUri;
+		} catch (error) {
+			LoggerService.warn("補齊 event_vss 事件圖片失敗", error);
+		}
 	}
 
 	// 私有方法
