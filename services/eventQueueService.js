@@ -36,6 +36,18 @@ class EventQueueService {
 		// 定時清理機制
 		this.cleanupInterval = null;
 		this.startCleanupTimer();
+
+		// 在 constructor 末尾加入 Watchdog 定時器
+		this.watchdogInterval = setInterval(() => {
+			try {
+				if (this.hasEventsToProcess() && !this.isProcessing) {
+					LoggerService.hcp("[EVENT_QUEUE] Watchdog 重新啟動處理流程");
+					this.startProcessing();
+				}
+			} catch (err) {
+				LoggerService.warn("[EVENT_QUEUE] Watchdog 執行錯誤", err);
+			}
+		}, 15000); // 每 15 秒檢查一次
 	}
 
 	/**
@@ -501,6 +513,10 @@ class EventQueueService {
 	 */
 	destroy() {
 		this.stopCleanupTimer();
+		if (this.watchdogInterval) {
+			clearInterval(this.watchdogInterval);
+			this.watchdogInterval = null;
+		}
 	}
 }
 
