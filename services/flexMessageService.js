@@ -1133,32 +1133,20 @@ class FlexMessageService {
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createEventFlexMessage(eventData) {
-		const { eventType } = eventData;
 		const ability = this.getEventAbility(eventData);
-		const eventTypeStr = String(eventType);
 
-		if (ability === "event_face_match") {
-			return await this.createFaceMatchFlexMessage(eventData);
+		const handlerMap = {
+			event_face_match: this.createFaceMatchFlexMessage.bind(this),
+			event_acs: this.createAccessControlFlexMessage.bind(this),
+			event_vss: this.createVssEventFlexMessage.bind(this)
+		};
+
+		if (ability && handlerMap[ability]) {
+			return await handlerMap[ability](eventData);
 		}
 
-		if (ability === "event_acs") {
-			return await this.createAccessControlFlexMessage(eventData);
-		}
-
-		if (ability === "event_vss") {
-			// 溫度事件仍使用專用模板
-			if (eventTypeStr === "192517") {
-				return await this.createTemperatureEventFlexMessage(eventData);
-			}
-			return await this.createGenericEventFlexMessage(eventData);
-		}
-
-		// 向後相容：若 ability 缺失但事件類型為溫度警報，仍使用專用模板
-		if (eventTypeStr === "192517") {
-			return await this.createTemperatureEventFlexMessage(eventData);
-		}
-
-		return await this.createGenericEventFlexMessage(eventData);
+		// 預設回退為 event_vss 處理流程，確保舊資料仍可用
+		return await this.createVssEventFlexMessage(eventData);
 	}
 
 	/**
@@ -1240,26 +1228,20 @@ class FlexMessageService {
 	}
 
 	/**
-	 * 建立一般事件的 FlexMessage
-	 * 用於處理未分類的事件類型，包括 AIOP 事件 (3086) 等其他事件
-	 * 根據 HCP OpenAPI 規範：AIOP 事件為設備應用事件，data 欄位包含擴展信息
+	 * 建立影像事件 (event_vss) 的 FlexMessage
+	 * 包含 AIOP、溫度等影像能力事件
 	 * @param {Object} eventData - 完整的事件數據
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
-	async createGenericEventFlexMessage(eventData) {
+	async createVssEventFlexMessage(eventData) {
 		return await this.createBaseEventFlexMessage(eventData, {
 			getImageUri: (eventData, data) => {
-				// 根據 HCP 規範，嘗試多種可能的圖片來源
-				// 優先檢查人臉圖片（Face Picture Comparison Event Message 格式）
-				const faceImage = data?.alarmResult?.faces?.URL || null;
-				// 其次檢查門禁圖片（Access Control Event Message 格式）
-				const picUri = data?.picUri || null;
-				// 檢查事件層級的 eventPicUri（用於溫度等警報事件）
-				const eventPicUri = eventData.eventPicUri || data?.eventPicUri || null;
-				// 選擇可用的圖片來源
-				return faceImage || picUri || eventPicUri || null;
+				if (eventData.eventPicUri) {
+					return eventData.eventPicUri;
+				}
+				return data?.eventPicUri || data?.picUri || data?.alarmResult?.faces?.URL || null;
 			},
-			imageType: "generic_event"
+			imageType: "event_vss"
 		});
 	}
 
@@ -1279,24 +1261,6 @@ class FlexMessageService {
 				return faces?.URL || null;
 			},
 			imageType: "face_match"
-		});
-	}
-
-	/**
-	 * 建立溫度事件的 FlexMessage
-	 * 根據 HCP OpenAPI 規範：事件代碼 192517，使用通用警報結構
-	 * 圖片 URI 位於事件記錄的 eventPicUri 欄位中
-	 * @param {Object} eventData - 完整的事件數據
-	 * @returns {Promise<Object>} FlexMessage 物件
-	 */
-	async createTemperatureEventFlexMessage(eventData) {
-		return await this.createBaseEventFlexMessage(eventData, {
-			getImageUri: (eventData, data) => {
-				// 根據 HCP 規範：溫度警報的圖片位於事件記錄的 eventPicUri
-				// 優先檢查事件層級的 eventPicUri，其次檢查 data 內的 picUri
-				return eventData.eventPicUri || data?.eventPicUri || data?.picUri || null;
-			},
-			imageType: "temperature"
 		});
 	}
 

@@ -12,6 +12,12 @@
       "enabled": true,
       "priority": "high"
     },
+    "131588": {
+      "name": "區域入侵",
+      "ability": "event_vss",
+      "enabled": true,
+      "priority": "medium"
+    },
     "131659": {
       "name": "即時比對結果",
       "ability": "event_face_match",
