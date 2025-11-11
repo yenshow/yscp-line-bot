@@ -297,7 +297,7 @@ class EventQueueService {
 
 		const params = {
 			pageNo: 1,
-			pageSize: 1,
+			pageSize: 2,
 			sortField: "TriggeringTime",
 			orderType: 1
 		};
@@ -306,8 +306,8 @@ class EventQueueService {
 			params.eventIndexCode = eventId;
 		}
 
-		if (eventType != null) {
-			params.eventType = String(eventType);
+		if (!eventId && eventType != null) {
+			params.eventTypes = String(eventType);
 		}
 
 		if (eventData?.srcType) {
@@ -370,8 +370,19 @@ class EventQueueService {
 
 			LoggerService.hcp(`[EVENT_ENRICH] 查詢事件紀錄參數: ${JSON.stringify(query)}`);
 			const result = await this.hcpClient.getEventRecords(query);
-			if (!result || result.code !== "0" || !result.data || !Array.isArray(result.data.list) || !result.data.list.length) {
-				LoggerService.hcp("[EVENT_ENRICH] 事件紀錄查詢沒有找到對應資料");
+
+			if (!result) {
+				LoggerService.error("[EVENT_ENRICH] getEventRecords 無回應");
+				return;
+			}
+
+			if (result.code !== "0") {
+				LoggerService.warn(`[EVENT_ENRICH] 查詢失敗 code=${result.code} msg=${result.msg || "無"}`);
+				return;
+			}
+
+			if (!result.data || !Array.isArray(result.data.list) || result.data.list.length === 0) {
+				LoggerService.hcp("[EVENT_ENRICH] 查詢成功但無資料");
 				return;
 			}
 
