@@ -354,13 +354,16 @@ class EventQueueService {
 				return;
 			}
 
+			LoggerService.debug(`[EVENT_ENRICH] 查詢事件紀錄參數: ${JSON.stringify(query)}`);
 			const result = await this.hcpClient.getEventRecords(query);
 			if (!result || result.code !== "0" || !result.data || !Array.isArray(result.data.list) || !result.data.list.length) {
+				LoggerService.debug("[EVENT_ENRICH] 事件紀錄查詢沒有找到對應資料");
 				return;
 			}
 
 			const picUri = this.extractEventPicUri(result.data.list[0]);
 			if (!picUri) {
+				LoggerService.debug("[EVENT_ENRICH] 事件紀錄沒有找到圖片 URI");
 				return;
 			}
 
@@ -369,6 +372,7 @@ class EventQueueService {
 				eventData.data = {};
 			}
 			eventData.data.eventPicUri = eventData.data.eventPicUri || picUri;
+			LoggerService.debug(`[EVENT_ENRICH] 補齊事件圖片成功 eventId=${eventData.eventId}`);
 		} catch (error) {
 			LoggerService.warn("補齊 event_vss 事件圖片失敗", error);
 		}
