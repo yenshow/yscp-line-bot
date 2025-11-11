@@ -154,6 +154,7 @@ class EventQueueService {
 			return;
 		}
 
+		LoggerService.hcp("[EVENT_QUEUE] startProcessing");
 		this.isProcessing = true;
 		this.cleanupProcessedEvents();
 
@@ -165,16 +166,22 @@ class EventQueueService {
 
 			const eventItem = this.getNextEvent();
 			if (!eventItem) {
+				LoggerService.hcp("[EVENT_QUEUE] 沒有事件待處理，結束循環");
 				break;
 			}
 
 			this.processingCount++;
+			LoggerService.hcp(`[EVENT_QUEUE] 處理事件開始 eventId=${eventItem.data?.eventId}`);
 			this.processEventItem(eventItem).finally(() => {
 				this.processingCount--;
+				LoggerService.hcp(
+					`[EVENT_QUEUE] 處理事件結束 eventId=${eventItem.data?.eventId} currentProcessing=${this.processingCount}`
+				);
 			});
 		}
 
 		this.isProcessing = false;
+		LoggerService.hcp("[EVENT_QUEUE] 處理流程結束");
 	}
 
 	/**
@@ -185,6 +192,7 @@ class EventQueueService {
 
 		try {
 			EventStorageService.storeEvent(data);
+			LoggerService.hcp(`[EVENT_QUEUE] storeEvent 完成 eventId=${data?.eventId}`);
 			await processor(data);
 		} catch (error) {
 			LoggerService.error(`事件處理失敗: ${data.eventType || "未知"}`, error);
@@ -196,9 +204,12 @@ class EventQueueService {
 	 */
 	async processEvent(eventData) {
 		try {
+			LoggerService.hcp(`[EVENT_PROCESS] 開始處理 eventId=${eventData?.eventId}`);
 			await this.enrichEventData(eventData);
 			await this.enforceRateLimit();
-			return await this.sendEventNotification(eventData);
+			const result = await this.sendEventNotification(eventData);
+			LoggerService.hcp(`[EVENT_PROCESS] 處理完成 eventId=${eventData?.eventId}`);
+			return result;
 		} catch (error) {
 			LoggerService.error("處理事件失敗", error);
 			throw error;
