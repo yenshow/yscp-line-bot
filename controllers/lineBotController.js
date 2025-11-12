@@ -106,10 +106,6 @@ class LineBotController {
 		});
 	}
 
-	// 用戶管理改由 Line 訊息互動處理，不再提供 HTTP API
-
-	// 事件隊列管理功能已移除 - 由系統自動管理
-
 	/**
 	 * 處理 HCP 事件接收（Webhook）- 用於 Line Bot 通知
 	 */
@@ -160,6 +156,10 @@ class LineBotController {
 			const params = eventData.params || {};
 			const ability = params.ability;
 			const events = params.events || [];
+			const flexMessageService = require("../services/flexMessageService");
+			const EventStorageService = require("../services/eventStorageService");
+			const cfgSvc = require("../services/configService");
+			const botClient = this.lineBotService?.client;
 
 			// 立即回應成功
 			res.status(200).json({
@@ -170,27 +170,33 @@ class LineBotController {
 			// 記錄成功回應
 			LoggerService.httpStatus(`HCP 事件推送回應: 事件已接收`, 200, req.method, req.originalUrl);
 
-			// 非同步處理事件（用於 Line Bot 通知）
-			if (events.length > 0) {
-				LoggerService.hcp(`[EVENT_RECEIVER] 接收到 ${events.length} 個 ${ability} 事件，開始處理`);
+			// 非同步直接處理並推送，繞過事件佇列
+			if (events.length && botClient) {
+				const usersCfg = cfgSvc.loadConfig("user-management.json", { users: {} });
+				const targets = Object.values(usersCfg.users || {})
+					.filter((u) => u && (u.role === "admin" || u.role === "target"))
+					.map((u) => u.id || u.userId)
+					.filter(Boolean);
 
-				// 只記錄一次完整的原始事件資料
-				LoggerService.hcp(`[原始資料] 完整事件資料: ${JSON.stringify(eventData, null, 2)}`);
+				if (targets.length === 0) {
+					LoggerService.warn("沒有通知目標，跳過推送");
+					return;
+				}
 
-				events.forEach((event) => {
-					this.eventQueueService.enqueueHCPEvent({
-						ability,
-						eventType: event.eventType,
-						happenTime: event.happenTime,
-						srcName: event.srcName,
-						srcType: event.srcType,
-						srcIndex: event.srcIndex,
-						eventId: event.eventId,
-						data: event.data // 傳遞完整的原始 data 內容
-					});
+				LoggerService.hcp(`[EVENT_RECEIVER] 直接處理 ${events.length} 個事件`);
+
+				events.forEach(async (ev) => {
+					try {
+						const flexMsg = await new flexMessageService().createEventFlexMessage({
+							ability,
+							...ev
+						});
+						await Promise.all(targets.map((id) => botClient.pushMessage(id, [flexMsg])));
+						EventStorageService.appendEventToHistory({ ...ev, ability });
+					} catch (err) {
+						LoggerService.error("即時處理並推送事件失敗", err);
+					}
 				});
-			} else {
-				LoggerService.hcp("[EVENT_RECEIVER] 沒有事件需要處理");
 			}
 		} catch (error) {
 			const processingTime = Date.now() - startTime;
