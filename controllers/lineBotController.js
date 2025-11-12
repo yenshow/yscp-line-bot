@@ -13,7 +13,7 @@ class LineBotController {
 		this.lineBotService = LineBotManager.getService();
 		this.isConfigured = LineBotManager.isServiceConfigured();
 		this.hcpClient = HCPClient.getInstance();
-		this.eventQueueService = new EventQueueService();
+		this.eventQueueService = EventQueueService;
 
 		// 初始化事件隊列服務
 		this.initializeEventQueueService();

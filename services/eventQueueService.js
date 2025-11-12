@@ -531,4 +531,11 @@ class EventQueueService {
 	}
 }
 
-module.exports = EventQueueService;
+// 導出單例，並在載入時即啟動佇列處理
+const singleton = new EventQueueService();
+// 確保佇列循環啟動（若有殘餘事件）
+setImmediate(() => {
+	singleton.startProcessing();
+});
+
+module.exports = singleton;
