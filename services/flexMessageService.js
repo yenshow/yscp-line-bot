@@ -1237,6 +1237,7 @@ class FlexMessageService {
 		// 若佇列 enrich 尚未補到圖片，嘗試即時查詢一次（僅限 event_vss）
 		if (!eventData.eventPicUri && !eventData._quickQueried) {
 			try {
+				LoggerService.hcp(`[QUICK_QUERY] start eventId=${eventData.eventId}`);
 				eventData._quickQueried = true; // 避免重複查
 				const hcp = this.getHCPClient();
 				const res = await hcp.getEventRecords({

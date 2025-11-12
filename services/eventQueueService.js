@@ -402,6 +402,7 @@ class EventQueueService {
 			}
 
 			const picUri = this.extractEventPicUri(result.data.list[0]);
+			LoggerService.hcp(`[DEBUG ENRICH] eventId=${eventData.eventId} picUri=${picUri || "none"}`);
 			if (!picUri) {
 				LoggerService.hcp("[EVENT_ENRICH] 事件紀錄沒有找到圖片 URI");
 				return;
