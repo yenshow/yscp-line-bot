@@ -32,7 +32,7 @@ class LineBotController {
 				}
 
 				if (this.lineBotService.client) {
-					this.eventQueueService.initialize(this.lineBotService.client, null);
+					this.eventQueueService.initialize(this.lineBotService.client);
 				} else {
 					LoggerService.warn("LineBotService 客戶端未配置");
 				}

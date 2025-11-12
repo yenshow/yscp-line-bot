@@ -1242,10 +1242,10 @@ class FlexMessageService {
 				pageSize: 1
 			};
 			const recordsResult = await hcpClient.getEventRecords(queryParams);
-			LoggerService.debug(`[createVssEventFlexMessage] getEventRecords result: ${JSON.stringify(recordsResult)}`);
+			LoggerService.hcp(`[createVssEventFlexMessage] getEventRecords result: ${JSON.stringify(recordsResult)}`);
 			if (recordsResult?.code === "0" && recordsResult.data?.list?.length) {
 				eventPicUri = recordsResult.data.list[0].eventPicUri || null;
-				LoggerService.debug(`[createVssEventFlexMessage] eventPicUri: ${eventPicUri}`);
+				LoggerService.hcp(`[createVssEventFlexMessage] eventPicUri: ${eventPicUri}`);
 			}
 		} catch (error) {
 			LoggerService.error("查詢事件紀錄失敗", error);
