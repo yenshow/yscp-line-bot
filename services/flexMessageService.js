@@ -186,7 +186,6 @@ class FlexMessageService {
 					const imageSources = event.imageSources || {};
 					const faceImage = imageSources.faceUrl || event?.data?.alarmResult?.faces?.URL || null;
 					const picUri = imageSources.picUri || event?.data?.picUri || null;
-					// 檢查事件層級的 eventPicUri（用於溫度等事件）
 					const eventPicUri = event.eventPicUri || event?.data?.eventPicUri || null;
 					const targetUri = faceImage || picUri || eventPicUri || null;
 
@@ -1234,39 +1233,24 @@ class FlexMessageService {
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
 	async createVssEventFlexMessage(eventData) {
-		// 若佇列 enrich 尚未補到圖片，嘗試即時查詢一次（僅限 event_vss）
-		if (!eventData.eventPicUri && !eventData._quickQueried) {
-			try {
-				LoggerService.hcp(`[QUICK_QUERY] start eventId=${eventData.eventId}`);
-				eventData._quickQueried = true; // 避免重複查
-				const hcp = this.getHCPClient();
-				const res = await hcp.getEventRecords({
-					eventIndexCode: eventData.eventId,
-					pageNo: 1,
-					pageSize: 1,
-					srcType: eventData.srcType,
-					srcIndex: String(eventData.srcIndex || ""),
-					startTime: new Date(new Date(eventData.happenTime).getTime() - 60 * 60 * 1000).toISOString(),
-					endTime: new Date(new Date(eventData.happenTime).getTime() + 60 * 60 * 1000).toISOString(),
-					sortField: "TriggeringTime",
-					orderType: 1
-				});
-				if (res && res.code === "0" && res.data?.list?.length) {
-					const first = res.data.list[0];
-					eventData.eventPicUri =
-						first.eventPicUri || (Array.isArray(first.eventPicList) ? first.eventPicList.find((x) => x?.eventPicUri)?.eventPicUri : null) || null;
-				}
-			} catch (err) {
-				LoggerService.warn("quick query event_vss image failed", err);
+		const hcpClient = this.getHCPClient();
+		let eventPicUri = null;
+		try {
+			const queryParams = {
+				eventIndexCode: eventData.eventId || eventData.eventIndexCode,
+				pageNo: 1,
+				pageSize: 1
+			};
+			const recordsResult = await hcpClient.getEventRecords(queryParams);
+			if (recordsResult?.code === "0" && recordsResult.data?.list?.length) {
+				eventPicUri = recordsResult.data.list[0].eventPicUri || null;
 			}
+		} catch (error) {
+			LoggerService.error("查詢事件紀錄失敗", error);
 		}
-
 		return await this.createBaseEventFlexMessage(eventData, {
-			getImageUri: (eventData, data) => {
-				if (eventData.eventPicUri) return eventData.eventPicUri;
-				return data?.eventPicUri || data?.picUri || data?.alarmResult?.faces?.URL || null;
-			},
-			imageType: "event_vss"
+			getImageUri: () => eventPicUri,
+			imageType: "vss_event"
 		});
 	}
 
