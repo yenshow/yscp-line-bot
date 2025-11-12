@@ -40,12 +40,20 @@ class EventQueueService {
 		// 在 constructor 末尾加入 Watchdog 定時器
 		this.watchdogInterval = setInterval(() => {
 			try {
-				if (this.hasEventsToProcess() && !this.isProcessing) {
-					LoggerService.hcp("[EVENT_QUEUE] Watchdog 重新啟動處理流程");
-					this.startProcessing();
+				if (!this.hasEventsToProcess()) return;
+				// 情況1：完全沒有在處理
+				if (!this.isProcessing) {
+					LoggerService.hcp("[WATCHDOG] 偵測到待處理事件且 isProcessing=false → 重新啟動");
+					return this.startProcessing();
+				}
+				// 情況2：旗標卡住 (isProcessing=true) 但實際沒有任務
+				if (this.isProcessing && this.processingCount === 0) {
+					LoggerService.warn("[WATCHDOG] 偵測到 processingCount=0 但 isProcessing=true → 重置旗標並重啟");
+					this.isProcessing = false;
+					return this.startProcessing();
 				}
 			} catch (err) {
-				LoggerService.warn("[EVENT_QUEUE] Watchdog 執行錯誤", err);
+				LoggerService.warn("[WATCHDOG] 執行錯誤", err);
 			}
 		}, 15000); // 每 15 秒檢查一次
 	}
@@ -148,6 +156,7 @@ class EventQueueService {
 			this.eventQueue.push(eventItem);
 		}
 
+		LoggerService.hcp(`[DEBUG ENQUEUE] eventId=${eventData.eventId} priority=${priority} isProcessing=${this.isProcessing}`);
 		LoggerService.hcp(`事件已加入隊列: ${eventData.eventType} (${eventData.eventId})`);
 
 		// 如果沒有在處理，開始處理
@@ -166,7 +175,7 @@ class EventQueueService {
 			return;
 		}
 
-		LoggerService.hcp("[EVENT_QUEUE] startProcessing");
+		LoggerService.hcp("[DEBUG START] enter startProcessing");
 		this.isProcessing = true;
 		this.cleanupProcessedEvents();
 		try {
@@ -193,6 +202,7 @@ class EventQueueService {
 			LoggerService.error("[EVENT_QUEUE] 佇列處理致命錯誤", error);
 		} finally {
 			this.isProcessing = false;
+			LoggerService.hcp("[DEBUG START] leave startProcessing");
 			LoggerService.hcp("[EVENT_QUEUE] 處理流程結束");
 		}
 	}
