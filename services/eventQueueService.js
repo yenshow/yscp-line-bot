@@ -31,8 +31,6 @@ class EventQueueService {
 		this.flexMessageService = null;
 		this.hcpClient = HCPClient.getInstance();
 
-		this.eventRecordLookupWindowMs = 5 * 60 * 1000; // 5 分鐘查詢範圍
-
 		// 定時清理機制
 		this.cleanupInterval = null;
 		this.startCleanupTimer();
@@ -228,7 +226,7 @@ class EventQueueService {
 	async processEvent(eventData) {
 		try {
 			LoggerService.hcp(`[EVENT_PROCESS] 開始處理 eventId=${eventData?.eventId}`);
-			await this.enrichEventData(eventData);
+			// FlexMessageService 內部已自行處理圖片查詢
 			await this.enforceRateLimit();
 			const result = await this.sendEventNotification(eventData);
 			LoggerService.hcp(`[EVENT_PROCESS] 處理完成 eventId=${eventData?.eventId}`);
@@ -298,141 +296,6 @@ class EventQueueService {
 
 		this.lastSendTime = Date.now();
 	}
-
-	resolveAbility(eventData) {
-		if (eventData?.ability) {
-			return eventData.ability;
-		}
-
-		const config = this.hcpClient.getEventTypeConfig(eventData?.eventType);
-		return config?.ability || null;
-	}
-
-	hasEventImage(eventData) {
-		return !!eventData?.eventPicUri || !!eventData?.data?.eventPicUri || !!eventData?.data?.picUri || !!eventData?.data?.alarmResult?.faces?.URL;
-	}
-
-	buildEventRecordQuery(eventData) {
-		const eventId = eventData?.eventId;
-		const eventType = eventData?.eventType;
-
-		if (!eventId && eventType == null) {
-			return null;
-		}
-
-		const params = {
-			pageNo: 1,
-			pageSize: 2,
-			sortField: "TriggeringTime",
-			orderType: 1
-		};
-
-		if (eventId) {
-			params.eventIndexCode = eventId;
-		}
-
-		if (!eventId && eventType != null) {
-			params.eventTypes = String(eventType);
-		}
-
-		if (eventData?.srcType) {
-			params.srcType = eventData.srcType;
-		}
-
-		if (eventData?.srcIndex) {
-			params.srcIndex = String(eventData.srcIndex);
-		}
-
-		if (eventData?.happenTime) {
-			const happenAt = new Date(eventData.happenTime);
-			if (!Number.isNaN(happenAt.getTime())) {
-				params.startTime = new Date(happenAt.getTime() - this.eventRecordLookupWindowMs).toISOString();
-				params.endTime = new Date(happenAt.getTime() + this.eventRecordLookupWindowMs).toISOString();
-			}
-		}
-
-		return params;
-	}
-
-	extractEventPicUri(record) {
-		if (!record) {
-			return null;
-		}
-
-		if (record.eventPicUri) {
-			return record.eventPicUri;
-		}
-
-		if (Array.isArray(record.eventPicList)) {
-			const item = record.eventPicList.find((entry) => entry?.eventPicUri);
-			if (item) {
-				return item.eventPicUri;
-			}
-		}
-
-		return null;
-	}
-
-	async enrichEventData(eventData) {
-		try {
-			const ability = this.resolveAbility(eventData);
-			LoggerService.hcp(`[EVENT_ENRICH] ability=${ability || "null"} eventId=${eventData?.eventId}`);
-			if (ability !== "event_vss") {
-				LoggerService.hcp("[EVENT_ENRICH] 非 event_vss 事件，略過");
-				return;
-			}
-
-			if (this.hasEventImage(eventData)) {
-				LoggerService.hcp("[EVENT_ENRICH] 事件已包含圖片來源，略過查詢");
-				return;
-			}
-
-			const query = this.buildEventRecordQuery(eventData);
-			if (!query) {
-				LoggerService.hcp("[EVENT_ENRICH] 無法組成事件紀錄查詢參數");
-				return;
-			}
-
-			LoggerService.hcp(`[EVENT_ENRICH] 查詢事件紀錄參數: ${JSON.stringify(query)}`);
-			const result = await this.hcpClient.getEventRecords(query);
-
-			if (!result) {
-				LoggerService.error("[EVENT_ENRICH] getEventRecords 無回應");
-				return;
-			}
-
-			if (result.code !== "0") {
-				LoggerService.warn(`[EVENT_ENRICH] 查詢失敗 code=${result.code} msg=${result.msg || "無"}`);
-				return;
-			}
-
-			if (!result.data || !Array.isArray(result.data.list) || result.data.list.length === 0) {
-				LoggerService.hcp("[EVENT_ENRICH] 查詢成功但無資料");
-				return;
-			}
-
-			const picUri = this.extractEventPicUri(result.data.list[0]);
-			LoggerService.hcp(`[DEBUG ENRICH] eventId=${eventData.eventId} picUri=${picUri || "none"}`);
-			if (!picUri) {
-				LoggerService.hcp("[EVENT_ENRICH] 事件紀錄沒有找到圖片 URI");
-				return;
-			}
-
-			eventData.eventPicUri = picUri;
-			if (!eventData.data) {
-				eventData.data = {};
-			}
-			eventData.data.eventPicUri = eventData.data.eventPicUri || picUri;
-			EventStorageService.updateEventData(eventData.eventId, {
-				eventPicUri: picUri,
-				data: { eventPicUri: picUri }
-			});
-			LoggerService.hcp(`[EVENT_ENRICH] 補齊事件圖片成功 eventId=${eventData.eventId}`);
-		} catch (error) {
-			LoggerService.warn("補齊 event_vss 事件圖片失敗", error);
-		}
-	}
-
 	// 私有方法
 	hasEventsToProcess() {
 		return this.eventQueue.length > 0 || this.priorityQueue.length > 0;
