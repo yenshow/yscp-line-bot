@@ -193,9 +193,9 @@ class LineBotController {
 			// 非同步直接處理並推送（含去重和頻率控制）
 			if (events.length && botClient) {
 				const usersCfg = configService.loadConfig("user-management.json", { users: {} });
-				const targets = Object.values(usersCfg.users || {})
-					.filter((u) => u && (u.role === "admin" || u.role === "target"))
-					.map((u) => u.id || u.userId)
+				const targets = Object.entries(usersCfg.users || {})
+					.filter(([, user]) => user && (user.role === "admin" || user.role === "target"))
+					.map(([userId, user]) => user.id || user.userId || userId)
 					.filter(Boolean);
 
 				if (targets.length === 0) {

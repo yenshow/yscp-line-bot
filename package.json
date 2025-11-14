@@ -7,6 +7,7 @@
     "start": "pm2 start ecosystem.config.js",
     "dev": "nodemon app.js",
     "quick-start": "./quick-start.sh",
+    "cleanup": "bash scripts/pm2-cleanup.sh",
     "log-cleanup": "node scripts/log-cleanup.js",
     "subscribe-events": "node scripts/subscribe-events.js",
     "stop": "pm2 stop ecosystem.config.js",
