@@ -4,42 +4,69 @@
  */
 
 const LineBotManager = require("../services/lineBotService");
-const HCPClient = require("../services/hcpClient");
-const EventQueueService = require("../services/eventQueueService");
 const LoggerService = require("../services/loggerService");
+const FlexMessageService = require("../services/flexMessageService");
+const EventStorageService = require("../services/eventStorageService");
+const configService = require("../services/configService");
+const config = require("../config");
 
 class LineBotController {
 	constructor() {
 		this.lineBotService = LineBotManager.getService();
 		this.isConfigured = LineBotManager.isServiceConfigured();
-		this.hcpClient = HCPClient.getInstance();
-		this.eventQueueService = EventQueueService;
 
-		// 初始化事件隊列服務
-		this.initializeEventQueueService();
+		// 去重機制：記錄已處理的事件 ID（60 秒內不重複處理）
+		this.processedEvents = new Map();
+		this.dedupeTTL = 60000; // 60 秒
+
+		// 頻率控制：記錄最後推送時間，限制推送間隔
+		this.lastPushTime = 0;
+		this.minPushInterval = 2000; // 2 秒最小間隔
+
+		// 定期清理過期的去重記錄（每 5 分鐘）
+		setInterval(() => this.cleanupProcessedEvents(), 5 * 60 * 1000);
 	}
 
 	/**
-	 * 初始化事件隊列服務
+	 * 檢查事件是否為重複（去重）
+	 * @param {string} eventId - 事件 ID
+	 * @returns {boolean} 是否為重複事件
 	 */
-	initializeEventQueueService() {
-		// 延遲初始化，避免循環依賴
-		setTimeout(() => {
-			try {
-				if (!this.lineBotService) {
-					LoggerService.warn("LineBotService 未配置，事件隊列服務初始化延遲");
-					return;
-				}
+	isDuplicateEvent(eventId) {
+		if (!eventId) return false;
+		const now = Date.now();
+		const processedTime = this.processedEvents.get(eventId);
+		if (processedTime && now - processedTime < this.dedupeTTL) {
+			return true;
+		}
+		this.processedEvents.set(eventId, now);
+		return false;
+	}
 
-				if (this.lineBotService.client) {
-					this.eventQueueService.initialize(this.lineBotService.client);
-				} else {
-					LoggerService.warn("LineBotService 客戶端未配置");
-				}
-			} catch (error) {
-				LoggerService.error("LineBotController 事件隊列服務初始化失敗", error);
+	/**
+	 * 清理過期的去重記錄
+	 */
+	cleanupProcessedEvents() {
+		const now = Date.now();
+		for (const [eventId, processedTime] of this.processedEvents.entries()) {
+			if (now - processedTime > this.dedupeTTL) {
+				this.processedEvents.delete(eventId);
 			}
-		}, 500);
+		}
+	}
+
+	/**
+	 * 執行頻率控制（確保推送間隔）
+	 * @returns {Promise<void>}
+	 */
+	async enforceRateLimit() {
+		const now = Date.now();
+		const timeSinceLastPush = now - this.lastPushTime;
+		if (timeSinceLastPush < this.minPushInterval) {
+			const waitTime = this.minPushInterval - timeSinceLastPush;
+			await new Promise((resolve) => setTimeout(resolve, waitTime));
+		}
+		this.lastPushTime = Date.now();
 	}
 
 	/**
@@ -76,17 +103,14 @@ class LineBotController {
 			}
 
 			// 處理所有事件
-			const promises = events.map((event) => {
-				return this.lineBotService.handleEvent(event);
-			});
-			await Promise.all(promises);
+			await Promise.all(events.map((event) => this.lineBotService.handleEvent(event)));
 
 			res.status(200).json({
 				success: true,
 				processedEvents: events.length
 			});
 		} catch (error) {
-			console.error("Line Bot Webhook 錯誤:", error);
+			LoggerService.error("Line Bot Webhook 錯誤", error);
 			res.status(500).json({
 				success: false,
 				error: "Internal Server Error",
@@ -129,7 +153,6 @@ class LineBotController {
 
 			const receivedToken =
 				req.headers["x-ca-token"] || req.headers["token"] || req.headers["authorization"] || req.headers["x-auth-token"] || req.headers["x-event-token"];
-			const config = require("../config");
 
 			if (config.server.eventToken && config.server.eventToken !== "your_unique_verification_token" && receivedToken !== config.server.eventToken) {
 				LoggerService.warn("事件 Token 驗證失敗");
@@ -156,9 +179,6 @@ class LineBotController {
 			const params = eventData.params || {};
 			const ability = params.ability;
 			const events = params.events || [];
-			const flexMessageService = require("../services/flexMessageService");
-			const EventStorageService = require("../services/eventStorageService");
-			const cfgSvc = require("../services/configService");
 			const botClient = this.lineBotService?.client;
 
 			// 立即回應成功
@@ -170,9 +190,9 @@ class LineBotController {
 			// 記錄成功回應
 			LoggerService.httpStatus(`HCP 事件推送回應: 事件已接收`, 200, req.method, req.originalUrl);
 
-			// 非同步直接處理並推送，繞過事件佇列
+			// 非同步直接處理並推送（含去重和頻率控制）
 			if (events.length && botClient) {
-				const usersCfg = cfgSvc.loadConfig("user-management.json", { users: {} });
+				const usersCfg = configService.loadConfig("user-management.json", { users: {} });
 				const targets = Object.values(usersCfg.users || {})
 					.filter((u) => u && (u.role === "admin" || u.role === "target"))
 					.map((u) => u.id || u.userId)
@@ -183,20 +203,51 @@ class LineBotController {
 					return;
 				}
 
-				LoggerService.hcp(`[EVENT_RECEIVER] 直接處理 ${events.length} 個事件`);
+				// 過濾重複事件
+				const uniqueEvents = events.filter((ev) => {
+					const isDup = this.isDuplicateEvent(ev.eventId);
+					if (isDup) {
+						LoggerService.hcp(`[EVENT_RECEIVER] 跳過重複事件: ${ev.eventId}`);
+					}
+					return !isDup;
+				});
 
-				events.forEach(async (ev) => {
+				if (uniqueEvents.length === 0) {
+					LoggerService.hcp(`[EVENT_RECEIVER] 所有事件都是重複的，跳過處理`);
+					return;
+				}
+
+				LoggerService.hcp(`[EVENT_RECEIVER] 處理 ${uniqueEvents.length} 個事件（已過濾 ${events.length - uniqueEvents.length} 個重複事件）`);
+
+				// 處理事件（含頻率控制和併發限制）
+				const processEvent = async (ev) => {
 					try {
-						const flexMsg = await new flexMessageService().createEventFlexMessage({
+						const flexMsg = await new FlexMessageService().createEventFlexMessage({
 							ability,
 							...ev
 						});
+
+						// 頻率控制：在推送前確保間隔（避免觸發 Line Bot API 速率限制）
+						await this.enforceRateLimit();
+
 						await Promise.all(targets.map((id) => botClient.pushMessage(id, [flexMsg])));
 						EventStorageService.appendEventToHistory({ ...ev, ability });
 					} catch (err) {
 						LoggerService.error("即時處理並推送事件失敗", err);
 					}
-				});
+				};
+
+				// 限制併發數量為 3，避免同時發起過多 API 請求
+				const maxConcurrent = 3;
+				const processWithConcurrency = async () => {
+					for (let i = 0; i < uniqueEvents.length; i += maxConcurrent) {
+						const batch = uniqueEvents.slice(i, i + maxConcurrent);
+						await Promise.all(batch.map(processEvent));
+					}
+				};
+
+				// 非同步執行，不阻塞 HTTP 回應
+				void processWithConcurrency();
 			}
 		} catch (error) {
 			const processingTime = Date.now() - startTime;
@@ -208,36 +259,6 @@ class LineBotController {
 				message: "處理事件時發生錯誤"
 			});
 		}
-	}
-
-	/**
-	 * 統一的錯誤處理方法
-	 */
-	handleError(res, error, operation) {
-		const errorMessage = `${operation}失敗`;
-		console.error(`❌ ${errorMessage}:`, error);
-		this.sendResponse(res, false, errorMessage, { error: error.message }, 500);
-	}
-
-	/**
-	 * 統一的 API 回應方法
-	 */
-	sendResponse(res, success, message, data = null, statusCode = 200) {
-		const response = {
-			success,
-			message
-		};
-		if (data) {
-			response.data = data;
-		}
-		res.status(statusCode).json(response);
-	}
-
-	/**
-	 * 統一的成功回應方法（向後兼容）
-	 */
-	sendSuccess(res, message, data = null) {
-		this.sendResponse(res, true, message, data);
 	}
 }
 
