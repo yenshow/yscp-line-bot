@@ -1,12 +1,12 @@
 require("dotenv").config();
 
 const config = {
-	// HCP API 配置
+	// YSCP API 配置
 	hcp: {
-		host: process.env.HCP_HOST || "https://yscp.yenshow.com",
-		ak: process.env.HCP_AK,
-		sk: process.env.HCP_SK,
-		apiVersion: process.env.HCP_API_VER || "v1"
+		host: process.env.YSCP_HOST || "https://yscp.yenshow.com",
+		ak: process.env.YSCP_AK,
+		sk: process.env.YSCP_SK,
+		apiVersion: process.env.YSCP_API_VER || "v1"
 	},
 
 	// Line Bot 配置
@@ -19,7 +19,7 @@ const config = {
 	server: {
 		port: process.env.PORT || 6000,
 		env: "development",
-		// HCP 事件回呼地址 (需要設定為您的伺服器公開 URL)
+		// YSCP 事件回呼地址 (需要設定為您的伺服器公開 URL)
 		webhookUrl: process.env.WEBHOOK_URL,
 		// 事件訂閱驗證 Token
 		eventToken: process.env.EVENT_TOKEN || "your_unique_verification_token"

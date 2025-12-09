@@ -1,7 +1,10 @@
+// 確保載入環境變數
+require("dotenv").config();
+
 module.exports = {
 	apps: [
 		{
-			name: "hcp-line-bot-backend",
+			name: "yscp-line-bot-backend",
 			script: "app.js",
 			cwd: __dirname,
 			instances: 1,
@@ -10,12 +13,12 @@ module.exports = {
 			max_memory_restart: "1G",
 			env: {
 				NODE_ENV: "development",
-				PORT: 6000,
+				// PORT 從 .env 讀取，預設值在 config.js 中定義
 				TZ: "Asia/Taipei"
 			},
 			env_production: {
 				NODE_ENV: "production",
-				PORT: 6000,
+				// PORT 從 .env 讀取，預設值在 config.js 中定義
 				TZ: "Asia/Taipei"
 			},
 			// 日誌配置 - 分離 stdout 和 stderr
@@ -45,30 +48,61 @@ module.exports = {
 			// 保留日誌數量
 			retain_logs: 5
 		},
-		{
-			name: "ngrok-tunnel",
-			script: "ngrok",
-			args: "http 6000 --log=stdout",
-			cwd: "/Users/caijunyao/Desktop/yscp line bot/backend",
-			instances: 1,
-			autorestart: true,
-			watch: false,
-			env: {
-				NODE_ENV: "development",
-				TZ: "Asia/Taipei"
-			},
-			// ngrok 專用配置
-			min_uptime: "5s",
-			max_restarts: 5,
-			restart_delay: 2000,
-			// 進程管理
-			kill_timeout: 5000,
-			listen_timeout: 3000,
-			force: true,
-			stop_timeout: 5000,
-			log_file: "/dev/null",
-			time: false,
-			merge_logs: false
-		}
+		// Ngrok 隧道（僅在有 authtoken 時啟動）
+		...(function () {
+			try {
+				const ngrokService = require("./services/ngrokService");
+
+				// 如果啟用了 ngrok 但還沒配置，嘗試自動配置
+				if (ngrokService.enabled && !ngrokService.isConfigured()) {
+					ngrokService.configureAuthtoken();
+				}
+
+				// 檢查是否應該啟動 ngrok
+				if (ngrokService.shouldStart()) {
+					const ngrokPath = ngrokService.getNgrokPath();
+					if (!ngrokPath || ngrokPath === "ngrok") {
+						return [];
+					}
+
+					// 從環境變數讀取端口，預設為 6000（與 config.js 保持一致）
+					const port = process.env.PORT || 6000;
+				return [
+						{
+							name: "ngrok-tunnel",
+							script: ngrokPath,
+							args: `http ${port} --log=stdout`,
+							cwd: __dirname,
+							instances: 1,
+							autorestart: true,
+							watch: false,
+							env: {
+								NODE_ENV: "development",
+								TZ: "Asia/Taipei"
+							},
+							// ngrok 專用配置
+							min_uptime: "5s",
+							max_restarts: 5,
+							restart_delay: 2000,
+							// 進程管理
+							kill_timeout: 5000,
+							listen_timeout: 3000,
+							force: true,
+							stop_timeout: 5000,
+							// 日誌配置 - 整合到主要日誌檔案
+							error_file: "./logs/error.log",
+							out_file: "./logs/app.log",
+							log_date_format: "YYYY-MM-DD HH:mm:ss",
+							time: true,
+							merge_logs: true
+						}
+					];
+				}
+			} catch (error) {
+				// 如果無法載入 ngrokService，不啟動 ngrok
+				console.warn("⚠️  無法載入 ngrokService，跳過 ngrok 啟動:", error.message);
+			}
+			return [];
+		})()
 	]
 };

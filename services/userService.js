@@ -146,6 +146,13 @@ class UserService {
 	getRooms() {
 		return this.getByType("room");
 	}
+
+	/**
+	 * 清除快取（用於檔案監聽時重新載入配置）
+	 */
+	clearCache() {
+		this.cache = { data: null, ts: 0 };
+	}
 }
 
 module.exports = new UserService();

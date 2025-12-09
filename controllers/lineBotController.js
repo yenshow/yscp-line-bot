@@ -131,7 +131,7 @@ class LineBotController {
 	}
 
 	/**
-	 * 處理 HCP 事件接收（Webhook）- 用於 Line Bot 通知
+	 * 處理 YSCP 事件接收（Webhook）- 用於 Line Bot 通知
 	 */
 	async handleEventReceiver(req, res) {
 		const startTime = Date.now();
@@ -140,7 +140,7 @@ class LineBotController {
 			// 檢查 req.body 是否存在
 			if (!req.body || typeof req.body !== "object") {
 				LoggerService.warn(`[EVENT_RECEIVER] 無效的請求體: ${typeof req.body}`);
-				LoggerService.httpStatus(`HCP 事件推送回應: 無效的請求體`, 400, req.method, req.originalUrl);
+				LoggerService.httpStatus(`YSCP 事件推送回應: 無效的請求體`, 400, req.method, req.originalUrl);
 				return res.status(400).json({
 					success: false,
 					error: "Invalid request body",
@@ -156,7 +156,7 @@ class LineBotController {
 
 			if (config.server.eventToken && config.server.eventToken !== "your_unique_verification_token" && receivedToken !== config.server.eventToken) {
 				LoggerService.warn("事件 Token 驗證失敗");
-				LoggerService.httpStatus(`HCP 事件推送回應: Token 驗證失敗`, 401, req.method, req.originalUrl);
+				LoggerService.httpStatus(`YSCP 事件推送回應: Token 驗證失敗`, 401, req.method, req.originalUrl);
 				return res.status(401).json({
 					success: false,
 					error: "Unauthorized",
@@ -167,7 +167,7 @@ class LineBotController {
 			// 驗證訊息格式
 			if (!eventData.method || eventData.method !== "OnEventNotify") {
 				LoggerService.warn(`[EVENT_RECEIVER] 未知的事件方法: ${eventData.method}`);
-				LoggerService.httpStatus(`HCP 事件推送回應: 未知的事件方法`, 400, req.method, req.originalUrl);
+				LoggerService.httpStatus(`YSCP 事件推送回應: 未知的事件方法`, 400, req.method, req.originalUrl);
 				return res.status(400).json({
 					success: false,
 					error: "Invalid event format",
@@ -188,7 +188,7 @@ class LineBotController {
 			});
 
 			// 記錄成功回應
-			LoggerService.httpStatus(`HCP 事件推送回應: 事件已接收`, 200, req.method, req.originalUrl);
+			LoggerService.httpStatus(`YSCP 事件推送回應: 事件已接收`, 200, req.method, req.originalUrl);
 
 			// 非同步直接處理並推送（含去重和頻率控制）
 			if (events.length && botClient) {
@@ -251,8 +251,8 @@ class LineBotController {
 			}
 		} catch (error) {
 			const processingTime = Date.now() - startTime;
-			LoggerService.error(`處理 HCP 事件錯誤: ${error.message} - 處理時間: ${processingTime}ms`, error);
-			LoggerService.httpStatus(`HCP 事件推送回應: 處理事件時發生錯誤`, 500, req.method, req.originalUrl);
+			LoggerService.error(`處理 YSCP 事件錯誤: ${error.message} - 處理時間: ${processingTime}ms`, error);
+			LoggerService.httpStatus(`YSCP 事件推送回應: 處理事件時發生錯誤`, 500, req.method, req.originalUrl);
 			res.status(500).json({
 				success: false,
 				error: "Internal Server Error",
@@ -260,6 +260,7 @@ class LineBotController {
 			});
 		}
 	}
+
 }
 
 module.exports = LineBotController;

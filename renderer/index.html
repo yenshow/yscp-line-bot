@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<title>YSCP Line Bot - 設定精靈</title>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<div class="container">
+			<h1>🚀 YSCP Line Bot 設定精靈</h1>
+
+			<!-- 步驟指示器 -->
+			<div class="step-indicator">
+				<div class="step active" id="step1-indicator">
+					<div class="step-circle">1</div>
+					<div class="step-label">輸入授權</div>
+				</div>
+				<div class="step" id="step2-indicator">
+					<div class="step-circle">2</div>
+					<div class="step-label">環境配置</div>
+				</div>
+				<div class="step" id="step3-indicator">
+					<div class="step-circle">3</div>
+					<div class="step-label">測試啟用</div>
+				</div>
+				<div class="step" id="step4-indicator">
+					<div class="step-circle">4</div>
+					<div class="step-label">完整前端</div>
+				</div>
+			</div>
+
+			<!-- Step 1: 輸入授權 -->
+			<div class="step-content active" id="step1">
+				<h2>🔑 步驟 1: 輸入授權</h2>
+				<div class="info-box">
+					<p><strong>說明：</strong>請輸入您的 SerialNumber 以啟用授權。系統會自動從授權伺服器獲取對應的 License Key。</p>
+				</div>
+				<div class="form-group">
+					<label for="serialNumberInput">SerialNumber</label>
+					<input type="text" id="serialNumberInput" placeholder="例如: SN-001" />
+				</div>
+				<div id="step1-status"></div>
+				<div class="button-group">
+					<button onclick="activateLicense()" id="activateBtn">啟用授權</button>
+					<button class="secondary" onclick="checkLicenseStatus()">檢查狀態</button>
+				</div>
+			</div>
+
+			<!-- Step 2: 環境配置 -->
+			<div class="step-content" id="step2">
+				<h2>⚙️ 步驟 2: 環境配置</h2>
+				<div class="info-box">
+					<p>
+						<strong>說明：</strong>請依序填寫以下環境變數。標記為
+						<span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px">必填</span> 的項目必須填寫，標記為
+						<span style="background: #ffc107; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 11px">可選</span> 的項目可稍後配置。
+					</p>
+				</div>
+
+				<!-- 配置進度 -->
+				<div id="config-progress" style="display: none">
+					<div class="progress-bar">
+						<div class="progress-fill" id="progressFill" style="width: 0%"></div>
+					</div>
+					<div class="progress-text" id="progressText">載入中...</div>
+				</div>
+
+				<!-- 配置項目列表 -->
+				<div id="config-items">
+					<div style="text-align: center; padding: 20px; color: #999">載入配置項目中...</div>
+				</div>
+
+				<div id="step2-status"></div>
+
+				<div class="button-group">
+					<button onclick="openConfigFile()">開啟配置</button>
+					<button class="success" onclick="validateConfig()">驗證配置</button>
+				</div>
+			</div>
+
+			<!-- Step 3: 測試啟用 -->
+			<div class="step-content" id="step3">
+				<h2>🧪 步驟 3: 測試啟用</h2>
+				<div class="info-box">
+					<p><strong>說明：</strong>測試服務是否能正常啟動。這將驗證所有配置是否正確。</p>
+				</div>
+				<div id="step3-status"></div>
+				<div class="logs" id="test-logs">
+					<div>等待測試...</div>
+				</div>
+				<div class="button-group">
+					<button onclick="testService()" id="testBtn">開始測試</button>
+					<button class="secondary" onclick="stopTest()" id="stopTestBtn" disabled>停止測試</button>
+				</div>
+			</div>
+
+			<!-- Step 4: 完整前端 -->
+			<div class="step-content" id="step4">
+				<h2>🎯 步驟 4: 完整前端</h2>
+				<div class="info-box">
+					<p><strong>說明：</strong>設定完成！您現在可以使用完整的功能控制面板。</p>
+				</div>
+				<div id="step4-status" class="status-box"><strong>狀態：</strong><span id="serviceStatus">已停止</span></div>
+				<div class="button-group">
+					<button onclick="startService()" id="startBtn">啟動服務</button>
+					<button onclick="stopService()" id="stopBtn" disabled>停止服務</button>
+					<button class="secondary" onclick="openLogs()">查看日誌</button>
+					<button class="secondary" onclick="openConfig()">開啟配置</button>
+				</div>
+				<div class="logs" id="service-logs">
+					<div>等待服務啟動...</div>
+				</div>
+			</div>
+
+			<!-- 底部導航 -->
+			<div class="button-group" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px">
+				<button class="secondary" onclick="previousStep()" id="prevBtn" style="display: none">上一步</button>
+				<button onclick="nextStep()" id="nextBtn" style="display: none">下一步</button>
+			</div>
+		</div>
+
+		<script src="main.js"></script>
+	</body>
+</html>

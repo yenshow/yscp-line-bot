@@ -25,12 +25,10 @@ if (LineBotManager.isServiceConfigured()) {
 
 /**
  * Line Bot Webhook 端點
- * GET / - Line Platform 驗證用
- * POST / - 接收 Line Bot 事件
+ * POST / - 處理 LINE Bot Webhook 事件
  */
-router.get("/", (req, res) => lineBotController.getStatus(req, res));
-
 router.post("/", async (req, res, next) => {
+	// 處理 LINE Bot Webhook 事件
 	if (lineMiddleware) {
 		return lineMiddleware(req, res, (err) => {
 			if (err) return next(err);
@@ -41,6 +39,20 @@ router.post("/", async (req, res, next) => {
 	}
 });
 
+/**
+ * YSCP 事件接收端點（Webhook）- 用於 Line Bot 通知
+ * POST /hcp-event-receiver (保持向後兼容，實際使用 yscp-event-receiver)
+ */
+router.post("/hcp-event-receiver", (req, res) => {
+	lineBotController.handleEventReceiver(req, res);
+});
+
+/**
+ * Line Bot Webhook 端點
+ * GET / - Line Platform 驗證用
+ */
+router.get("/", (req, res) => lineBotController.getStatus(req, res));
+
 // ========== 測試端點 ==========
 
 /**
@@ -48,13 +60,5 @@ router.post("/", async (req, res, next) => {
  * GET /test
  */
 router.get("/test", (req, res) => lineBotController.test(req, res));
-
-/**
- * HCP 事件接收端點（Webhook）- 用於 Line Bot 通知
- * POST /hcp-event-receiver
- */
-router.post("/hcp-event-receiver", (req, res) => {
-	lineBotController.handleEventReceiver(req, res);
-});
 
 module.exports = router;

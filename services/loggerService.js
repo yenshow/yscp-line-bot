@@ -17,7 +17,7 @@ class LoggerService {
 
 		// 防止重複記錄的緩存
 		this.lastLogs = new Map();
-		this.duplicateThreshold = 30000; // 30秒內不記錄相同訊息
+		this.duplicateThreshold = 5000; // 5秒內不記錄相同訊息
 	}
 
 	/**
@@ -44,11 +44,11 @@ class LoggerService {
 	 * @returns {boolean} 是否為重複訊息
 	 */
 	isDuplicateMessage(key, message) {
-		// 簡化重複檢查，只在短時間內（5秒）避免完全相同的訊息
+		// 使用統一的時間閾值避免重複訊息
 		const now = Date.now();
 		const lastLog = this.lastLogs.get(key);
 
-		if (lastLog && now - lastLog.timestamp < 5000) {
+		if (lastLog && now - lastLog.timestamp < this.duplicateThreshold) {
 			lastLog.count++;
 			return true;
 		}
@@ -58,56 +58,50 @@ class LoggerService {
 	}
 
 	/**
-	 * 寫入日誌檔案
+	 * 寫入日誌檔案（統一使用 FileSystemService）
 	 * @param {string} filename - 日誌檔案名稱
 	 * @param {string} message - 日誌訊息
 	 * @param {string} level - 日誌等級
 	 */
 	writeLog(filename, message, level = "INFO") {
 		try {
+			if (!fileSystem || typeof fileSystem.appendFile !== "function") {
+				throw new Error("FileSystemService 未正確初始化，無法寫入日誌");
+			}
+
 			const timestamp = this.getTimestamp();
 			const logEntry = `[${timestamp}] [${level}] ${message}\n`;
 			const logPath = path.join(this.logsDir, filename);
 
-			// 檢查 fileSystem 是否可用
-			if (fileSystem && typeof fileSystem.appendFile === "function") {
-				fileSystem.appendFile(logPath, logEntry);
-			} else {
-				// 使用 Node.js 原生方法作為備用
-				const fs = require("fs");
-				fs.appendFileSync(logPath, logEntry);
-			}
+			fileSystem.appendFile(logPath, logEntry);
 		} catch (error) {
 			console.error("寫入日誌檔案錯誤:", error);
 		}
 	}
 
 	/**
-	 * 系統啟動日誌
+	 * 系統/服務資訊日誌（合併 system 和 service）
+	 * @param {string} message - 訊息
+	 */
+	info(message) {
+		this.writeLog("app.log", message, "INFO");
+		console.log(`ℹ️ [資訊] ${message}`);
+	}
+
+	/**
+	 * 系統啟動日誌（向後兼容，內部調用 info）
 	 * @param {string} message - 訊息
 	 */
 	system(message) {
-		this.writeLog("app.log", message, "SYSTEM");
-		console.log(`🚀 [系統] ${message}`);
+		this.info(message);
 	}
 
 	/**
-	 * 服務啟動日誌（簡化版）
-	 * @param {string} message - 訊息
-	 */
-	startup(message) {
-		// 只在控制台顯示，不寫入檔案（避免重複）
-		console.log(`🚀 ${message}`);
-	}
-
-	/**
-	 * 服務狀態日誌
+	 * 服務狀態日誌（向後兼容，內部調用 info）
 	 * @param {string} message - 訊息
 	 */
 	service(message) {
-		// 服務狀態記錄到 app.log
-		this.writeLog("app.log", message, "SERVICE");
-		console.log(`⚙️ [服務] ${message}`);
+		this.info(message);
 	}
 
 	/**
@@ -135,26 +129,16 @@ class LoggerService {
 	}
 
 	/**
-	 * HCP 事件日誌
+	 * YSCP 事件日誌
 	 * @param {string} message - 訊息
 	 * @param {string} eventId - 事件ID（可選，用於更精確的去重）
 	 */
 	hcp(message, eventId = null) {
-		// 簡化 HCP 日誌，重複處理由事件隊列層負責
-		this.writeLog("app.log", message, "HCP");
-		console.log(`📨 [HCP] ${message}`);
+		// 簡化 YSCP 日誌，重複處理由事件隊列層負責
+		this.writeLog("app.log", message, "YSCP");
+		console.log(`📨 [YSCP] ${message}`);
 	}
 
-	/**
-	 * HTTP 錯誤日誌（404, 500 等）
-	 * @param {string} message - 錯誤訊息
-	 * @param {number} statusCode - HTTP 狀態碼
-	 */
-	httpError(message, statusCode = 404) {
-		const errorMessage = `HTTP ${statusCode}: ${message}`;
-		// 所有 HTTP 錯誤都記錄到錯誤日誌
-		this.error(errorMessage);
-	}
 
 	/**
 	 * HTTP 狀態碼日誌（記錄所有狀態碼）
@@ -218,52 +202,17 @@ class LoggerService {
 	}
 
 	/**
-	 * 安全日誌（記錄到 error.log）
-	 * @param {string} message - 安全相關訊息
-	 */
-	security(message) {
-		// 安全相關事件記錄到 error.log
-		this.writeLog("error.log", message, "SECURITY");
-		console.warn(`🔒 [安全] ${message}`);
-	}
-
-	/**
-	 * 性能日誌（記錄到 app.log）
-	 * @param {string} message - 性能相關訊息
-	 */
-	performance(message) {
-		// 性能相關記錄到 app.log
-		this.writeLog("app.log", message, "PERF");
-		console.log(`⚡ [性能] ${message}`);
-	}
-
-	/**
-	 * 記錄新用戶活動到用戶活動日誌
-	 * @param {string} id - 用戶/群組 ID
-	 * @param {string} type - 類型
-	 * @param {string} action - 動作
-	 */
-	logNewUserActivity(id, type, action = "加入") {
-		// 記錄到 app.log
-		this.user(`${action} ${type} ${id} 已記錄，等待管理員審核`);
-	}
-
-	/**
-	 * 獲取日誌檔案列表
+	 * 獲取日誌檔案列表（統一使用 FileSystemService）
 	 * @returns {Array} 日誌檔案列表
 	 */
 	getLogFiles() {
 		try {
-			// 檢查 fileSystem 是否可用
-			if (fileSystem && typeof fileSystem.getDirectoryFiles === "function") {
-				const files = fileSystem.getDirectoryFiles(this.logsDir);
-				return files.filter((file) => file.endsWith(".log"));
-			} else {
-				// 使用 Node.js 原生方法作為備用
-				const fs = require("fs");
-				const files = fs.readdirSync(this.logsDir);
-				return files.filter((file) => file.endsWith(".log"));
+			if (!fileSystem || typeof fileSystem.getDirectoryFiles !== "function") {
+				throw new Error("FileSystemService 未正確初始化，無法獲取日誌檔案列表");
 			}
+
+			const files = fileSystem.getDirectoryFiles(this.logsDir);
+			return files.filter((file) => file.endsWith(".log"));
 		} catch (error) {
 			this.error("獲取日誌檔案列表錯誤", error);
 			return [];
@@ -271,83 +220,149 @@ class LoggerService {
 	}
 
 	/**
+	 * 獲取日誌目錄統計資訊（使用 FileSystemService 統一方法）
+	 * @returns {Object} 目錄統計資訊
+	 */
+	getLogDirectoryStats() {
+		try {
+			// 使用 FileSystemService 的統一方法，過濾日誌相關檔案
+			const stats = fileSystem.getDirectoryStatus("logs", {
+				filePattern: /\.(log|bak)$/,
+				includeFileDetails: true
+			});
+
+			if (!stats || !stats.exists) {
+				return { totalSize: 0, totalSizeMB: "0", totalSizeGB: "0", fileCount: 0, files: [] };
+			}
+
+			// 轉換為 LoggerService 期望的格式
+			return {
+				totalSize: stats.totalSize,
+				totalSizeMB: stats.totalSizeMB.toString(),
+				totalSizeGB: stats.totalSizeGB,
+				fileCount: stats.fileCount,
+				files: stats.files || []
+			};
+		} catch (error) {
+			this.error("獲取日誌目錄統計資訊錯誤", error);
+			return { totalSize: 0, totalSizeMB: "0", totalSizeGB: "0", fileCount: 0, files: [] };
+		}
+	}
+
+	/**
+	 * 檢查日誌目錄容量並發出告警（使用 FileSystemService 統一方法）
+	 * @param {Object} stats - 目錄統計資訊（可選，如果不提供則重新計算）
+	 */
+	checkLogDirectoryCapacity(stats = null) {
+		try {
+			// 使用 FileSystemService 的統一容量檢查方法
+			const directoryStats = fileSystem.checkDirectoryCapacity(this.logsDir, {
+				filePattern: /\.(log|bak)$/,
+				warningThresholdMB: 500,
+				criticalThresholdMB: 1000,
+				fileCountWarning: 100,
+				singleFileWarningMB: 50,
+				onWarning: (message) => {
+					this.warn(`[日誌告警] ${message}`);
+				},
+				onCritical: (message) => {
+					this.warn(`[日誌告警] ${message}，建議立即清理`);
+				}
+			});
+
+			// 如果提供了 stats 參數，確保返回的格式一致
+			if (stats && directoryStats) {
+				// 更新 stats 對象以保持一致性
+				stats.totalSize = directoryStats.totalSize;
+				stats.totalSizeMB = directoryStats.totalSizeMB.toString();
+				stats.totalSizeGB = directoryStats.totalSizeGB;
+				stats.fileCount = directoryStats.fileCount;
+				if (directoryStats.files) {
+					stats.files = directoryStats.files;
+				}
+			}
+		} catch (error) {
+			this.error("檢查日誌目錄容量錯誤", error);
+		}
+	}
+
+	/**
 	 * 清理舊日誌檔案（職權分離：完全依賴 FileSystemService）
 	 * @param {number} daysToKeep - 保留天數
+	 * @returns {Object} 清理結果統計
 	 */
 	cleanupOldLogs(daysToKeep = 7) {
 		try {
 			// 職權分離：統一使用 FileSystemService 的清理方法
 			if (!fileSystem || typeof fileSystem.cleanupExpiredFiles !== "function") {
 				this.error("FileSystemService 未正確初始化，無法清理日誌");
-				return 0;
+				return { cleanedCount: 0, freedSpaceMB: 0 };
 			}
+
+			// 清理前統計
+			const statsBefore = this.getLogDirectoryStats();
+			const sizeBeforeMB = parseFloat(statsBefore.totalSizeMB);
 
 			const cutoffTime = daysToKeep * 24 * 60 * 60 * 1000; // 轉換為毫秒
-			const cleanedCount = fileSystem.cleanupExpiredFiles(this.logsDir, cutoffTime, /\.log$/);
+			// 統一清理所有日誌相關檔案（包括 .log 和 .bak 備份檔案）
+			const cleanedCount = fileSystem.cleanupExpiredFiles(this.logsDir, cutoffTime, /\.(log|bak)$/);
+
+			// 清理後統計
+			const statsAfter = this.getLogDirectoryStats();
+			const sizeAfterMB = parseFloat(statsAfter.totalSizeMB);
+			const freedSpaceMB = (sizeBeforeMB - sizeAfterMB).toFixed(2);
 
 			if (cleanedCount > 0) {
-				this.service(`清理了 ${cleanedCount} 個超過 ${daysToKeep} 天的舊日誌檔案`);
+				this.service(`清理了 ${cleanedCount} 個超過 ${daysToKeep} 天的舊日誌檔案，釋放空間 ${freedSpaceMB}MB`);
 			}
 
-			return cleanedCount;
+			return {
+				cleanedCount,
+				freedSpaceMB: parseFloat(freedSpaceMB),
+				sizeBeforeMB,
+				sizeAfterMB,
+				fileCountBefore: statsBefore.fileCount,
+				fileCountAfter: statsAfter.fileCount
+			};
 		} catch (error) {
 			this.error("清理舊日誌檔案錯誤", error);
-			return 0;
+			return { cleanedCount: 0, freedSpaceMB: 0 };
 		}
 	}
 
 	/**
-	 * 檢查日誌檔案大小並輪轉
+	 * 檢查日誌檔案大小並輪轉（統一使用 FileSystemService）
 	 * @param {string} filename - 日誌檔案名稱
 	 * @param {number} maxSize - 最大檔案大小（MB）
 	 */
 	rotateLogFile(filename, maxSize = 10) {
 		try {
+			if (!fileSystem || typeof fileSystem.fileExists !== "function") {
+				throw new Error("FileSystemService 未正確初始化，無法執行日誌輪轉");
+			}
+
 			const filePath = path.join(this.logsDir, filename);
 
-			// 檢查 fileSystem 是否可用
-			if (fileSystem && typeof fileSystem.fileExists === "function") {
-				if (!fileSystem.fileExists(filePath)) {
-					return;
-				}
+			if (!fileSystem.fileExists(filePath)) {
+				return;
+			}
 
-				const stats = fileSystem.getFileStats(filePath);
-				if (!stats) return;
+			const stats = fileSystem.getFileStats(filePath);
+			if (!stats) return;
 
-				const fileSizeMB = stats.size / (1024 * 1024);
+			const fileSizeMB = stats.size / (1024 * 1024);
 
-				if (fileSizeMB > maxSize) {
-					// 創建備份檔案
-					const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-					const backupPath = path.join(this.logsDir, `${filename}.${timestamp}.bak`);
+			if (fileSizeMB > maxSize) {
+				// 先記錄：創建備份檔案
+				const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+				const backupPath = path.join(this.logsDir, `${filename}.${timestamp}.bak`);
 
-					// 讀取原檔案內容並寫入備份檔案
-					const content = fileSystem.readFile(filePath);
-					if (content && fileSystem.writeFile(backupPath, content)) {
-						fileSystem.deleteFile(filePath);
-						this.system(`日誌檔案已輪轉: ${filename} -> ${path.basename(backupPath)}`);
-					}
-				}
-			} else {
-				// 使用 Node.js 原生方法作為備用
-				const fs = require("fs");
-				if (!fs.existsSync(filePath)) {
-					return;
-				}
-
-				const stats = fs.statSync(filePath);
-				const fileSizeMB = stats.size / (1024 * 1024);
-
-				if (fileSizeMB > maxSize) {
-					// 創建備份檔案
-					const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-					const backupPath = path.join(this.logsDir, `${filename}.${timestamp}.bak`);
-
-					// 讀取原檔案內容並寫入備份檔案
-					const content = fs.readFileSync(filePath);
-					fs.writeFileSync(backupPath, content);
-					fs.unlinkSync(filePath);
-					this.system(`日誌檔案已輪轉: ${filename} -> ${path.basename(backupPath)}`);
+				// 讀取原檔案內容並寫入備份檔案
+				const content = fileSystem.readFile(filePath);
+				if (content && fileSystem.writeFile(backupPath, content)) {
+					// 確認備份成功後，再清空原檔案（保持檔案存在以繼續寫入）
+					fileSystem.writeFile(filePath, ""); // 清空檔案而不是刪除，保持檔案存在
+					this.system(`日誌檔案已輪轉: ${filename} -> ${path.basename(backupPath)} (已備份並清空)`);
 				}
 			}
 		} catch (error) {
@@ -356,34 +371,78 @@ class LoggerService {
 	}
 
 	/**
-	 * 定期清理和輪轉日誌（職權分離：使用 FileSystemService 管理清理任務）
+	 * 生成清理統計報告
+	 * @param {Object} cleanupResult - 清理結果
+	 * @param {Object} directoryStats - 目錄統計資訊
 	 */
-	scheduleLogMaintenance() {
-		// 每小時檢查一次日誌輪轉（輪轉是 LoggerService 的職責）
-		setInterval(() => {
+	generateCleanupReport(cleanupResult, directoryStats) {
+		const report = {
+			timestamp: this.getTimestamp(),
+			cleanup: {
+				filesDeleted: cleanupResult.cleanedCount,
+				spaceFreedMB: cleanupResult.freedSpaceMB,
+				sizeBeforeMB: cleanupResult.sizeBeforeMB,
+				sizeAfterMB: cleanupResult.sizeAfterMB,
+				fileCountBefore: cleanupResult.fileCountBefore,
+				fileCountAfter: cleanupResult.fileCountAfter
+			},
+			directory: {
+				totalSizeMB: directoryStats.totalSizeMB,
+				totalSizeGB: directoryStats.totalSizeGB,
+				fileCount: directoryStats.fileCount
+			}
+		};
+
+		// 輸出統計報告
+		this.info(
+			`📊 [清理統計] 刪除檔案: ${cleanupResult.cleanedCount} 個 | 釋放空間: ${cleanupResult.freedSpaceMB}MB | 當前目錄: ${directoryStats.totalSizeMB}MB (${directoryStats.fileCount} 個檔案)`
+		);
+
+		return report;
+	}
+
+	/**
+	 * 統一日誌維護任務（整合輪轉與清理）
+	 * 先執行輪轉檢查，再清理舊檔案，簡化為單一任務
+	 */
+	performLogMaintenance() {
+		try {
+			// 步驟 0: 檢查日誌目錄容量（監控告警）
+			const directoryStats = this.getLogDirectoryStats();
+			this.checkLogDirectoryCapacity(directoryStats);
+
+			// 步驟 1: 檢查並執行日誌輪轉（如果檔案過大）
 			this.rotateLogFile("app.log", 10);
 			this.rotateLogFile("error.log", 5);
-		}, 60 * 60 * 1000); // 1小時
 
-		// 職權分離：使用 FileSystemService 啟動日誌清理任務（統一管理）
-		if (fileSystem && typeof fileSystem.startScheduledCleanupTask === "function") {
-			// 每天清理一次舊日誌，保留7天
-			const daysToKeep = 7;
-			const maxAgeMinutes = daysToKeep * 24 * 60; // 7天 = 10080分鐘
-			fileSystem.startScheduledCleanupTask(
-				"log-files",
-				this.logsDir,
-				24 * 60, // 每24小時（1440分鐘）檢查一次
-				maxAgeMinutes,
-				/\.log$/,
-				"日誌檔案"
-			);
-		} else {
-			// 備用方案：如果 FileSystemService 不可用，使用舊方法
-			setInterval(() => {
-				this.cleanupOldLogs(7);
-			}, 24 * 60 * 60 * 1000); // 24小時
+			// 步驟 2: 清理超過保留期限的舊日誌檔案（保留 1 年）
+			const cleanupResult = this.cleanupOldLogs(365);
+
+			// 步驟 3: 生成清理統計報告
+			const updatedStats = this.getLogDirectoryStats();
+			this.generateCleanupReport(cleanupResult, updatedStats);
+		} catch (error) {
+			this.error("執行日誌維護任務錯誤", error);
 		}
+	}
+
+	/**
+	 * 啟動統一日誌維護任務（精簡版：單一定時任務）
+	 */
+	scheduleLogMaintenance() {
+		// 統一維護任務：每 24 小時執行一次
+		// 執行順序：先輪轉（處理大檔案）→ 再清理（處理舊檔案）
+		const maintenanceInterval = 24 * 60 * 60 * 1000; // 24 小時
+
+		// 立即執行一次維護
+		this.performLogMaintenance();
+
+		// 設定定時維護
+		setInterval(() => {
+			this.performLogMaintenance();
+		}, maintenanceInterval);
+
+		this.service("日誌維護任務已啟動（每 24 小時執行一次：輪轉 → 清理）");
 	}
 }
 

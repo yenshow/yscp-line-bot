@@ -3,19 +3,19 @@
     "3086": {
       "name": "未穿反光背心/未戴安全帽",
       "ability": "event_vss",
-      "enabled": true,
+      "enabled": false,
       "priority": "high"
     },
     "3089": {
       "name": "沒戴安全帽或背心",
       "ability": "event_vss",
-      "enabled": true,
+      "enabled": false,
       "priority": "high"
     },
     "131588": {
       "name": "區域入侵",
       "ability": "event_vss",
-      "enabled": true,
+      "enabled": false,
       "priority": "medium"
     },
     "131659": {

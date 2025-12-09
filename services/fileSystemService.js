@@ -217,11 +217,15 @@ class FileSystemService {
 	}
 
 	/**
-	 * 獲取目錄狀態
+	 * 獲取目錄狀態（增強版：支援檔案過濾和詳細資訊）
 	 * @param {string} dirName - 目錄名稱 (data, logs, temp)
+	 * @param {Object} options - 選項
+	 * @param {RegExp|null} options.filePattern - 檔案名稱模式（可選，如 /\.(log|bak)$/）
+	 * @param {boolean} options.includeFileDetails - 是否包含詳細檔案資訊（預設 false）
 	 * @returns {Object} 目錄狀態
 	 */
-	getDirectoryStatus(dirName) {
+	getDirectoryStatus(dirName, options = {}) {
+		const { filePattern = null, includeFileDetails = false } = options;
 		const dirPath = this.getDirectory(dirName);
 		if (!dirPath) {
 			return { exists: false, error: "未知目錄" };
@@ -230,22 +234,48 @@ class FileSystemService {
 		try {
 			const files = this.getDirectoryFiles(dirPath);
 			let totalSize = 0;
+			let fileCount = 0;
+			const fileStats = [];
 
 			files.forEach((filename) => {
+				// 如果有檔案模式限制，檢查檔案名稱
+				if (filePattern && !filename.match(filePattern)) {
+					return;
+				}
+
 				const filePath = path.join(dirPath, filename);
 				const stats = this.getFileStats(filePath);
 				if (stats && stats.isFile()) {
 					totalSize += stats.size;
+					fileCount++;
+
+					// 如果需要詳細資訊，記錄每個檔案的資訊
+					if (includeFileDetails) {
+						fileStats.push({
+							name: filename,
+							size: stats.size,
+							sizeMB: (stats.size / (1024 * 1024)).toFixed(2),
+							modified: stats.mtime
+						});
+					}
 				}
 			});
 
-			return {
+			const result = {
 				exists: true,
 				path: dirPath,
-				fileCount: files.length,
+				fileCount: fileCount,
 				totalSize: totalSize,
-				totalSizeMB: Math.round((totalSize / 1024 / 1024) * 100) / 100
+				totalSizeMB: Math.round((totalSize / 1024 / 1024) * 100) / 100,
+				totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(2)
 			};
+
+			// 如果需要詳細資訊，添加檔案列表
+			if (includeFileDetails) {
+				result.files = fileStats;
+			}
+
+			return result;
 		} catch (error) {
 			return {
 				exists: false,
@@ -363,12 +393,12 @@ class FileSystemService {
 			if (!success) return null;
 
 			// 檢查是否有設置公網可訪問的 URL
-			const baseUrl = process.env.NGROK_URL || process.env.PUBLIC_URL || `http://localhost:${config.server.port}`;
+			const baseUrl = process.env.NGROK_URL || `http://localhost:${config.server.port}`;
 			const imageUrl = `${baseUrl}/temp/${filename}`;
 
 			// 如果使用 localhost，記錄警告
 			if (baseUrl.includes("localhost")) {
-				console.warn("⚠️ 警告：使用 localhost URL，Line Bot 可能無法訪問圖片。請設置 NGROK_URL 或 PUBLIC_URL 環境變數。");
+				console.warn("⚠️ 警告：使用 localhost URL，Line Bot 可能無法訪問圖片。請設置 NGROK_URL 環境變數。");
 			}
 
 			// 檔案將由定時清理服務自動管理
@@ -385,6 +415,7 @@ class FileSystemService {
 	 * @returns {string} 完整的文件 URL
 	 */
 	getTempFileUrl(filename) {
+		// 統一使用 NGROK_URL（如果使用固定域名，也可以設定為 NGROK_URL）
 		const baseUrl = process.env.NGROK_URL || `http://localhost:${config.server.port}`;
 		return `${baseUrl}/temp/${filename}`;
 	}
@@ -458,9 +489,13 @@ class FileSystemService {
 		try {
 			const maxAge = maxAgeMinutes * 60 * 1000; // 轉換為毫秒
 
-			// 檢查目錄容量（僅對 temp 目錄）
+			// 檢查目錄容量（僅對 temp 目錄，使用預設配置）
 			if (dirPath === this.directories.temp) {
-				this.checkDirectoryCapacity(dirPath);
+				this.checkDirectoryCapacity(dirPath, {
+					filePattern: filePattern,
+					onWarning: (msg) => console.warn(msg),
+					onCritical: (msg) => console.warn(msg)
+				});
 			}
 
 			const cleanedCount = this.cleanupExpiredFiles(dirPath, maxAge, filePattern);
@@ -493,48 +528,155 @@ class FileSystemService {
 	}
 
 	/**
-	 * 檢查目錄容量並發出警告
+	 * 檢查目錄容量並發出警告（增強版：支援自定義告警回調）
 	 * @param {string} dirPath - 目錄路徑
+	 * @param {Object} options - 選項
+	 * @param {number} options.warningThresholdMB - 警告閾值（MB，預設 500）
+	 * @param {number} options.criticalThresholdMB - 嚴重警告閾值（MB，預設 1000）
+	 * @param {number} options.fileCountWarning - 檔案數量警告閾值（預設 null，不檢查）
+	 * @param {number} options.singleFileWarningMB - 單檔案大小警告閾值（MB，預設 null，不檢查）
+	 * @param {RegExp|null} options.filePattern - 檔案名稱模式（可選）
+	 * @param {Function} options.onWarning - 警告回調函數 (message) => void
+	 * @param {Function} options.onCritical - 嚴重警告回調函數 (message) => void
+	 * @param {Function} options.onInfo - 資訊回調函數 (message) => void（可選）
+	 * @returns {Object|null} 目錄統計資訊（如果檢查成功）
 	 */
-	checkDirectoryCapacity(dirPath) {
+	checkDirectoryCapacity(dirPath, options = {}) {
 		try {
-			const fs = require("fs");
-			if (!fs.existsSync(dirPath)) return;
+			if (!this.fileExists(dirPath)) return null;
 
-			// 計算目錄總大小
+			const {
+				warningThresholdMB = 500,
+				criticalThresholdMB = 1000,
+				fileCountWarning = null,
+				singleFileWarningMB = null,
+				filePattern = null,
+				onWarning = (msg) => console.warn(msg),
+				onCritical = (msg) => console.warn(msg),
+				onInfo = (msg) => console.log(msg)
+			} = options;
+
+			// 使用統一的目錄狀態查詢（如果提供了檔案模式）
+			let stats;
+			if (filePattern) {
+				// 需要過濾檔案，使用 getDirectoryStatus
+				const dirName = Object.keys(this.directories).find(
+					(key) => this.directories[key] === dirPath
+				);
+				if (dirName) {
+					stats = this.getDirectoryStatus(dirName, { filePattern, includeFileDetails: !!singleFileWarningMB });
+				} else {
+					// 如果不是已知目錄，手動計算
+					stats = this._calculateDirectoryStats(dirPath, filePattern, !!singleFileWarningMB);
+				}
+			} else {
+				// 不需要過濾，使用現有方法
+				const dirName = Object.keys(this.directories).find(
+					(key) => this.directories[key] === dirPath
+				);
+				if (dirName) {
+					stats = this.getDirectoryStatus(dirName, { includeFileDetails: !!singleFileWarningMB });
+				} else {
+					stats = this._calculateDirectoryStats(dirPath, null, !!singleFileWarningMB);
+				}
+			}
+
+			if (!stats || !stats.exists) return null;
+
+			const totalSizeMB = parseFloat(stats.totalSizeMB);
+			const fileCount = stats.fileCount;
+
+			// 容量告警
+			if (totalSizeMB > criticalThresholdMB) {
+				onCritical(`🚨 嚴重警告: ${dirPath} 目錄容量已達 ${stats.totalSizeMB}MB (${fileCount} 個檔案)`);
+			} else if (totalSizeMB > warningThresholdMB) {
+				onWarning(`⚠️ 容量警告: ${dirPath} 目錄容量已達 ${stats.totalSizeMB}MB (${fileCount} 個檔案)`);
+			}
+
+			// 檔案數量告警
+			if (fileCountWarning !== null && fileCount > fileCountWarning) {
+				onWarning(`⚠️ 檔案數量警告: ${dirPath} 目錄檔案數量過多: ${fileCount} 個檔案`);
+			}
+
+			// 單檔案大小告警
+			if (singleFileWarningMB !== null && stats.files) {
+				stats.files.forEach((file) => {
+					const fileSizeMB = parseFloat(file.sizeMB);
+					if (fileSizeMB > singleFileWarningMB) {
+						onWarning(`⚠️ 單檔案大小警告: ${file.name} (${file.sizeMB}MB)`);
+					}
+				});
+			}
+
+			// 記錄容量資訊（每小時記錄一次，僅當使用預設回調時）
+			if (onInfo === console.log && Date.now() % (60 * 60 * 1000) < 30000) {
+				onInfo(`📊 目錄容量: ${dirPath} - ${stats.totalSizeMB}MB (${fileCount} 個檔案)`);
+			}
+
+			return stats;
+		} catch (error) {
+			console.error("❌ 檢查目錄容量失敗:", error.message);
+			return null;
+		}
+	}
+
+	/**
+	 * 計算目錄統計資訊（內部方法）
+	 * @param {string} dirPath - 目錄路徑
+	 * @param {RegExp|null} filePattern - 檔案名稱模式
+	 * @param {boolean} includeFileDetails - 是否包含詳細檔案資訊
+	 * @returns {Object} 目錄統計資訊
+	 */
+	_calculateDirectoryStats(dirPath, filePattern = null, includeFileDetails = false) {
+		try {
+			const files = this.getDirectoryFiles(dirPath);
 			let totalSize = 0;
 			let fileCount = 0;
-			const files = fs.readdirSync(dirPath);
+			const fileStats = [];
 
-			files.forEach((file) => {
-				const filePath = path.join(dirPath, file);
-				const stats = fs.statSync(filePath);
-				if (stats.isFile()) {
+			files.forEach((filename) => {
+				// 如果有檔案模式限制，檢查檔案名稱
+				if (filePattern && !filename.match(filePattern)) {
+					return;
+				}
+
+				const filePath = path.join(dirPath, filename);
+				const stats = this.getFileStats(filePath);
+				if (stats && stats.isFile()) {
 					totalSize += stats.size;
 					fileCount++;
+
+					if (includeFileDetails) {
+						fileStats.push({
+							name: filename,
+							size: stats.size,
+							sizeMB: (stats.size / (1024 * 1024)).toFixed(2),
+							modified: stats.mtime
+						});
+					}
 				}
 			});
 
-			const totalSizeMB = totalSize / (1024 * 1024);
-			const totalSizeGB = totalSizeMB / 1024;
+			const result = {
+				exists: true,
+				path: dirPath,
+				fileCount: fileCount,
+				totalSize: totalSize,
+				totalSizeMB: Math.round((totalSize / 1024 / 1024) * 100) / 100,
+				totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(2)
+			};
 
-			// 容量警告閾值
-			const warningThresholdMB = 500; // 500MB 警告
-			const criticalThresholdMB = 1000; // 1GB 嚴重警告
-
-			if (totalSizeMB > criticalThresholdMB) {
-				console.warn(`🚨 嚴重警告: ${dirPath} 目錄容量已達 ${totalSizeMB.toFixed(2)}MB (${fileCount} 個檔案)`);
-			} else if (totalSizeMB > warningThresholdMB) {
-				console.warn(`⚠️ 容量警告: ${dirPath} 目錄容量已達 ${totalSizeMB.toFixed(2)}MB (${fileCount} 個檔案)`);
+			if (includeFileDetails) {
+				result.files = fileStats;
 			}
 
-			// 記錄容量資訊（每小時記錄一次）
-			if (Date.now() % (60 * 60 * 1000) < 30000) {
-				// 每小時的前30秒內記錄
-				console.log(`📊 目錄容量: ${dirPath} - ${totalSizeMB.toFixed(2)}MB (${fileCount} 個檔案)`);
-			}
+			return result;
 		} catch (error) {
-			console.error("❌ 檢查目錄容量失敗:", error.message);
+			return {
+				exists: false,
+				error: error.message,
+				path: dirPath
+			};
 		}
 	}
 

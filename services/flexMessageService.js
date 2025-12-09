@@ -186,7 +186,34 @@ class FlexMessageService {
 					const imageSources = event.imageSources || {};
 					const faceImage = imageSources.faceUrl || event?.data?.alarmResult?.faces?.URL || null;
 					const picUri = imageSources.picUri || event?.data?.picUri || null;
-					const eventPicUri = event.eventPicUri || event?.data?.eventPicUri || null;
+					let eventPicUri = imageSources.eventPicUri || event.eventPicUri || event?.data?.eventPicUri || null;
+
+					// 如果是 event_vss 類型且沒有 eventPicUri，額外查詢事件紀錄
+					if (!eventPicUri && event.ability === "event_vss" && event.eventId) {
+						try {
+							const queryParams = {
+								eventIndexCode: event.eventId,
+								pageNo: 1,
+								pageSize: 1
+							};
+							const recordsResult = await hcpClient.getEventRecords(queryParams);
+							LoggerService.hcp(`[createEventHistoryFlexMessage] getEventRecords result: ${JSON.stringify(recordsResult)}`);
+							if (recordsResult?.code === "0" && recordsResult.data?.list?.length) {
+								eventPicUri = recordsResult.data.list[0].eventPicUri || null;
+								LoggerService.hcp(`[createEventHistoryFlexMessage] eventPicUri: ${eventPicUri}`);
+								
+								// 將查詢到的 eventPicUri 更新到歷史記錄中
+								if (eventPicUri) {
+									EventStorageService.updateEventImageSources(event.eventId, {
+										eventPicUri: eventPicUri
+									});
+								}
+							}
+						} catch (error) {
+							LoggerService.error("查詢事件紀錄失敗", error);
+						}
+					}
+
 					const targetUri = faceImage || picUri || eventPicUri || null;
 
 					if (targetUri) {
@@ -1150,10 +1177,10 @@ class FlexMessageService {
 
 	/**
 	 * 建立事件 FlexMessage 的通用基礎方法
-	 * 根據 HCP OpenAPI 規範，所有事件都遵循相同的通用處理原則
+	 * 根據 YSCP OpenAPI 規範，所有事件都遵循相同的通用處理原則
 	 * @param {Object} eventData - 完整的事件數據
 	 * @param {Object} options - 配置選項
-	 * @param {Function} options.getImageUri - 取得圖片 URI 的函數，符合 HCP 規範的事件數據結構
+	 * @param {Function} options.getImageUri - 取得圖片 URI 的函數，符合 YSCP 規範的事件數據結構
 	 * @param {string} options.imageType - 圖片類型標識，用於圖片處理和去重
 	 * @returns {Promise<Object>} FlexMessage 物件
 	 */
@@ -1162,7 +1189,7 @@ class FlexMessageService {
 		const date = new Date(happenTime);
 		const timeString = date.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
 
-		// 取得圖片資料（根據 HCP 規範，圖片 URI 位於 data 欄位中）
+		// 取得圖片資料（根據 YSCP 規範，圖片 URI 位於 data 欄位中）
 		let imageUrl = null;
 		const { getImageUri, imageType } = options;
 		if (getImageUri && typeof getImageUri === "function") {
@@ -1258,7 +1285,7 @@ class FlexMessageService {
 
 	/**
 	 * 建立人臉比對事件的 FlexMessage
-	 * 根據 HCP OpenAPI 規範：事件代碼 131659，使用 Face Picture Comparison Event Message 格式
+	 * 根據 YSCP OpenAPI 規範：事件代碼 131659，使用 Face Picture Comparison Event Message 格式
 	 * 圖片 URI 位於 data.alarmResult.faces.URL
 	 * @param {Object} eventData - 完整的事件數據
 	 * @returns {Promise<Object>} FlexMessage 物件
@@ -1266,7 +1293,7 @@ class FlexMessageService {
 	async createFaceMatchFlexMessage(eventData) {
 		return await this.createBaseEventFlexMessage(eventData, {
 			getImageUri: (eventData, data) => {
-				// 根據 HCP 規範：Face Picture Comparison Event Message
+				// 根據 YSCP 規範：Face Picture Comparison Event Message
 				// 圖片位於 alarmResult.faces.URL
 				const faces = data?.alarmResult?.faces;
 				return faces?.URL || null;
@@ -1277,7 +1304,7 @@ class FlexMessageService {
 
 	/**
 	 * 建立門禁事件的 FlexMessage
-	 * 根據 HCP OpenAPI 規範：事件代碼 196893，使用 Access Control Event Message 格式
+	 * 根據 YSCP OpenAPI 規範：事件代碼 196893，使用 Access Control Event Message 格式
 	 * 圖片 URI 位於 data.picUri
 	 * @param {Object} eventData - 完整的事件數據
 	 * @returns {Promise<Object>} FlexMessage 物件
@@ -1285,13 +1312,14 @@ class FlexMessageService {
 	async createAccessControlFlexMessage(eventData) {
 		return await this.createBaseEventFlexMessage(eventData, {
 			getImageUri: (eventData, data) => {
-				// 根據 HCP 規範：Access Control Event Message
+				// 根據 YSCP 規範：Access Control Event Message
 				// 圖片位於 data.picUri
 				return data?.picUri || null;
 			},
 			imageType: "access_control"
 		});
 	}
+
 
 	/**
 	 * 取得事件圖片
@@ -1398,7 +1426,7 @@ class FlexMessageService {
 				icon: "🗑️",
 				title: "用戶已移除",
 				headerColor: this.theme.colors.warning,
-				message: "該用戶已從通知列表中移除，將無法再接收 HCP 事件通知。",
+				message: "該用戶已從通知列表中移除，將無法再接收 YSCP 事件通知。",
 				status: "已封鎖",
 				altText: `🗑️ 已移除用戶: ${userName}`
 			}

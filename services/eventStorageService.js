@@ -258,6 +258,46 @@ class EventStorageService {
 		}
 	}
 
+	/**
+	 * 更新歷史記錄中的圖片來源資訊
+	 * @param {string} eventId - 事件 ID
+	 * @param {Object} imageSources - 圖片來源物件
+	 * @param {string|null} imageSources.picUri - 圖片 URI
+	 * @param {string|null} imageSources.faceUrl - 人臉圖片 URL
+	 * @param {string|null} imageSources.eventPicUri - 事件圖片 URI
+	 */
+	updateEventImageSources(eventId, imageSources = {}) {
+		if (!eventId || !imageSources || Object.keys(imageSources).length === 0) {
+			return;
+		}
+
+		try {
+			const history = this.loadHistoryData();
+			let changed = false;
+			history.events = history.events.map((event) => {
+				if (event.eventId === eventId) {
+					changed = true;
+					const existingImageSources = event.imageSources || {};
+					return {
+						...event,
+						imageSources: {
+							...existingImageSources,
+							...imageSources
+						}
+					};
+				}
+				return event;
+			});
+
+			if (changed) {
+				history.lastUpdated = new Date().toISOString();
+				this.saveHistoryData(history);
+			}
+		} catch (error) {
+			LoggerService.error("更新事件圖片來源失敗", error);
+		}
+	}
+
 	getEventFromHistory(eventId) {
 		if (!eventId) {
 			return null;

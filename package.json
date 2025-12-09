@@ -1,15 +1,15 @@
 {
-  "name": "hcp-line-bot-backend",
+  "name": "yscp-line-bot-backend",
   "version": "1.0.0",
-  "description": "HCP OpenAPI 整合 Line Bot 後端服務",
-  "main": "app.js",
+  "description": "YSCP OpenAPI 整合 Line Bot 後端服務",
+  "main": "electron-main.js",
   "scripts": {
     "start": "pm2 start ecosystem.config.js",
     "dev": "nodemon app.js",
-    "quick-start": "./quick-start.sh",
+    "electron": "electron .",
     "cleanup": "bash scripts/pm2-cleanup.sh",
-    "log-cleanup": "node scripts/log-cleanup.js",
     "subscribe-events": "node scripts/subscribe-events.js",
+    "test:license": "node scripts/test-license.js",
     "stop": "pm2 stop ecosystem.config.js",
     "delete": "pm2 delete ecosystem.config.js",
     "restart": "pm2 restart ecosystem.config.js",
@@ -19,23 +19,31 @@
     "logs-error": "tail -f logs/error.log",
     "monitor": "pm2 monit",
     "status": "pm2 status",
-    "reset": "pm2 delete ecosystem.config.js 2>/dev/null || true; sleep 1; pm2 start ecosystem.config.js; pm2 status"
+    "reset": "pm2 delete ecosystem.config.js 2>/dev/null || true; sleep 1; pm2 start ecosystem.config.js; pm2 status",
+    "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@line/bot-sdk": "^7.5.2",
     "axios": "^1.6.0",
+    "busboy": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
     "morgan": "^1.10.0",
+    "ngrok": "^5.0.0-beta.2",
     "socket.io": "^4.8.1",
     "winston": "^3.11.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
     "nodemon": "^3.0.1",
     "pm2": "^6.0.13"
   }

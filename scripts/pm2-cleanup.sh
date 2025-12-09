@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# HCP Line Bot PM2 清理腳本
+# YSCP Line Bot PM2 清理腳本
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-APP_NAME="hcp-line-bot-backend"
+APP_NAME="yscp-line-bot-backend"
 TUNNEL_NAME="ngrok-tunnel"
 
 echo "🧹 開始清理 PM2 服務..."

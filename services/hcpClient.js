@@ -43,7 +43,7 @@ class HCPClient {
 	}
 
 	/**
-	 * 生成 HCP API 簽名
+	 * 生成 YSCP API 簽名
 	 * @param {string} method - HTTP 方法
 	 * @param {string} accept - Accept 標頭
 	 * @param {string} contentType - Content-Type 標頭
@@ -78,7 +78,7 @@ class HCPClient {
 	}
 
 	/**
-	 * 發送 HCP API 請求
+	 * 發送 YSCP API 請求
 	 * @param {string} endpoint - API 端點
 	 * @param {Object} data - 請求資料
 	 * @param {string} method - HTTP 方法，預設為 POST
@@ -115,7 +115,7 @@ class HCPClient {
 			const statusCode = error.response?.status || "N/A";
 			const statusText = error.response?.statusText || "N/A";
 
-			LoggerService.error(`HCP API 請求失敗: ${method} ${endpoint} - 狀態碼: ${statusCode} ${statusText}`, {
+			LoggerService.error(`YSCP API 請求失敗: ${method} ${endpoint} - 狀態碼: ${statusCode} ${statusText}`, {
 				endpoint,
 				method,
 				error: error.message,
@@ -126,10 +126,10 @@ class HCPClient {
 
 			// 使用新的狀態碼記錄功能
 			if (error.response?.status) {
-				LoggerService.httpStatus(`HCP API 請求失敗: ${error.message}`, error.response.status, method, endpoint);
+				LoggerService.httpStatus(`YSCP API 請求失敗: ${error.message}`, error.response.status, method, endpoint);
 			} else {
 				// 網路錯誤或其他非 HTTP 錯誤
-				LoggerService.httpStatus(`HCP API 請求失敗: ${error.message}`, 0, method, endpoint);
+				LoggerService.httpStatus(`YSCP API 請求失敗: ${error.message}`, 0, method, endpoint);
 			}
 
 			// 返回錯誤信息而不是拋出異常
@@ -203,7 +203,7 @@ class HCPClient {
 			const result = await this.request(endpoint, params);
 			return result;
 		} catch (error) {
-			LoggerService.error("HCP getEventImage API 調用失敗", error);
+			LoggerService.error("YSCP getEventImage API 調用失敗", error);
 			return {
 				code: "-1",
 				msg: `API 調用失敗: ${error.message}`,
@@ -225,7 +225,7 @@ class HCPClient {
 			const result = await this.request(endpoint, params);
 			return result;
 		} catch (error) {
-			LoggerService.error("HCP getEventRecords API 調用失敗", error);
+			LoggerService.error("YSCP getEventRecords API 調用失敗", error);
 			return {
 				code: "-1",
 				msg: `API 調用失敗: ${error.message}`,
@@ -455,12 +455,20 @@ class HCPClient {
 	 */
 	async reloadEventTypes() {
 		try {
-			LoggerService.hcp("手動重新載入事件類型配置");
-			this.loadEventTypes(true, true);
+			LoggerService.hcp("重新載入事件類型配置");
+			// 先載入配置
+			this.loadEventTypes(true, false); // 不自動同步，我們手動同步
+
+			// 如果啟用了自動訂閱管理，手動觸發同步並等待完成
+			if (this.settings.autoSubscribeNewTypes) {
+				LoggerService.hcp("開始同步訂閱狀態...");
+				await this.checkAndSyncSubscriptions();
+				LoggerService.hcp("訂閱狀態同步完成");
+			}
 
 			return {
 				success: true,
-				message: "事件類型配置已重新載入",
+				message: "事件類型配置已重新載入，訂閱狀態已同步",
 				count: Object.keys(this.eventTypes).length
 			};
 		} catch (error) {

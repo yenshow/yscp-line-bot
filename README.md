@@ -1,44 +1,61 @@
 # YSCP Line Bot - 智能監控通知系統
 
-整合 HikCentral Professional (HCP) 監控系統與 Line Bot，實現即時警報通知功能。
+整合 Yenshow Center Professional (YSCP) 監控系統與 Line Bot，實現即時警報通知功能。
 
 ## ✨ 主要功能
 
-- 🔐 **HCP API 整合** - 連接 HikCentral Professional 監控系統
+- 🔐 **YSCP API 整合** - 連接 HikCentral Professional 監控系統
 - 🤖 **Line Bot 服務** - 智能訊息處理和權限管理
 - 📨 **即時事件通知** - 自動推送監控事件到 Line
 - 👥 **用戶權限管理** - 管理員和群組權限控制
+- 🔑 **授權驗證系統** - 基於 MAC Address 的授權管理機制
 - 🧹 **自動清理服務** - 統一的檔案和日誌清理管理（保留 7 天）
-- 🌐 **跨平台支援** - 支援 Linux、macOS、Windows (Git Bash/WSL)
+- 🌐 **跨平台支援** - 支援 Windows、macOS、Linux
+- 📦 **安裝精靈** - 專業的安裝程式，支援授權驗證和自動配置
 
 ## 🚀 快速開始
 
-### 一鍵啟動（推薦）
+### 安裝方式
+
+**Windows 平台**：
+
+1. 下載 `YSCP-Line-Bot-Setup.exe` 安裝檔
+2. 執行安裝精靈，按照提示完成安裝
+3. 在安裝過程中完成授權驗證和系統配置
+
+**macOS 平台**：
+
+1. 下載 `YSCP-Line-Bot.dmg` 安裝檔
+2. 拖拽到 Applications 資料夾
+3. 首次執行時完成授權驗證和配置
+
+**Linux 平台**：
+
+1. 下載 `YSCP-Line-Bot.AppImage` 安裝檔
+2. 賦予執行權限：`chmod +x YSCP-Line-Bot.AppImage`
+3. 執行安裝檔並完成配置
+
+### 安裝後啟動
+
+安裝完成後，從開始選單或桌面快捷方式啟動服務，或使用命令列：
 
 ```bash
-npm run quick-start
+npm start
 ```
-
-腳本會自動：
-
-- ✅ 檢查環境（Node.js、npm、ngrok）
-- ✅ 建立 `.env` 範例檔案
-- ✅ 安裝依賴套件
-- ✅ 啟動 ngrok 隧道
-- ✅ 啟動後端服務
-- ✅ 檢查服務狀態
-- ✅ **自動執行事件訂閱**（新裝置初始化）
 
 ### 後續設定
 
-1. **編輯 `.env` 檔案**，填入您的 HCP 和 Line Bot 憑證
-2. **事件訂閱**：腳本會自動訂閱事件（如失敗可手動執行 `npm run subscribe-events`）
-3. **管理用戶**：透過 Line Bot 發送「管理」或「admin」指令（管理員專用）
-4. **測試系統**：在 HCP 管理介面測試事件推送
+1. **授權驗證**：安裝精靈會引導完成授權驗證（如未完成，請參考授權系統說明）
+2. **系統配置**：編輯 `.env` 檔案，填入 YSCP 和 Line Bot 憑證
+3. **事件訂閱**：系統會自動訂閱事件（如失敗可手動執行 `npm run subscribe-events`）
+4. **管理用戶**：透過 Line Bot 發送「管理」或「admin」指令（管理員專用）
 
-> 📖 詳細安裝指南請參考 [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)
+> 📖 詳細安裝指南請參考 [安裝指南](docs/INSTALLATION_GUIDE.md)  
+> 💻 開發環境設置請參考 [開發環境指南](docs/DEVELOPMENT.md)
 
 ## 📨 系統架構
+
+### YSCP OpenAPI 模式（集中化管理）
 
 ```
 HikCentral Professional → Webhook → Line Bot → 使用者
@@ -48,7 +65,7 @@ HikCentral Professional → Webhook → Line Bot → 使用者
 ### 通知範例
 
 ```
-🚨 HCP 系統警報
+🚨 YSCP 系統警報
 ⏰ 時間: 2024/10/13 下午2:30:00
 📌 事件類別: 門禁事件
 🔖 事件類型: 門禁拒絕
@@ -62,10 +79,10 @@ HikCentral Professional → Webhook → Line Bot → 使用者
 在 `.env` 檔案中設定：
 
 ```env
-# HCP API 配置
-HCP_HOST=https://yscp.yenshow.com
-HCP_AK=您的_Access_Key
-HCP_SK=您的_Secret_Key
+# YSCP API 配置
+YSCP_HOST=https://yscp.yenshow.com
+YSCP_AK=您的_Access_Key
+YSCP_SK=您的_Secret_Key
 
 # Line Bot 配置
 LINE_CHANNEL_ACCESS_TOKEN=您的_Channel_Access_Token
@@ -75,46 +92,28 @@ LINE_CHANNEL_SECRET=您的_Channel_Secret
 PORT=6000
 
 # Webhook 配置
-WEBHOOK_URL=https://您的公開域名/api/linebot/hcp-event-receiver
+WEBHOOK_URL=https://您的公開域名/api/linebot/yscp-event-receiver
 EVENT_TOKEN=您的唯一驗證Token
 
+# Ngrok 配置（可選，用於本地開發時提供公開 URL）
+# 1. 前往 https://dashboard.ngrok.com/get-started/your-authtoken 註冊並取得 authtoken
+# 2. 將 authtoken 填入下方，應用程式啟動時會自動配置
+NGROK_AUTHTOKEN=您的ngrok_authtoken
+
 # 公開 URL 配置（用於圖片顯示）
+# 如果使用 ngrok，此值會在 ngrok 啟動後自動更新
+# 如果使用固定域名，也可以直接填入
 NGROK_URL=https://您的ngrok域名.ngrok-free.dev
-PUBLIC_URL=https://您的公開域名
 ```
 
 ### 事件訂閱
 
-**方式 1：自動訂閱（推薦，新裝置初始化）**
-
-使用 `npm run quick-start` 時，腳本會自動執行事件訂閱。
-
-**方式 2：手動訂閱**
-
-如果自動訂閱失敗，可以手動執行：
-
-```bash
-npm run subscribe-events
-```
-
-**方式 3：透過 HCP 管理介面訂閱**
-
-1. 登入 HCP 管理介面
-2. 前往「事件服務」→「事件訂閱」
-3. 設定 Webhook URL：`https://您的域名/api/linebot/hcp-event-receiver`（推薦使用主要端點）
-   - 或使用向後兼容端點：`https://您的域名/api/hcp/event-receiver`
-4. 選擇要訂閱的事件類型
-
-**主要事件類型**（可在 `data/event-types.json` 查看完整列表）：
-
-- 🚪 **197128**: 門禁事件
-- 👤 **197130**: 人臉識別匹配
-- 🌡️ **193**: 溫度異常
-- 🦺 **3089**: 安全設備檢測
+安裝完成後系統會自動執行事件訂閱，如失敗可手動執行：`npm run subscribe-events`
 
 ## 📖 詳細文件
 
-- [安裝指南](INSTALLATION_GUIDE.md) - 完整的安裝和部署指南
+- [安裝指南](docs/INSTALLATION_GUIDE.md) - 完整的安裝和部署指南
+- [專業授權管理系統](docs/PROFESSIONAL_LICENSE_SYSTEM.md) - 授權驗證系統完整指南
 - [API 文件](#api-端點) - API 端點說明
 
 ## 🔧 API 端點
@@ -125,17 +124,20 @@ npm run subscribe-events
 | ---- | --------------------------------- | ----------------------------- |
 | POST | `/webhook`                        | Line Bot Webhook（主要）      |
 | POST | `/api/linebot`                    | Line Bot API（主要）          |
-| POST | `/api/linebot/hcp-event-receiver` | 接收 HCP 事件推送（主要）     |
-| POST | `/api/hcp/event-receiver`         | 接收 HCP 事件推送（向後兼容） |
+| POST | `/api/linebot/yscp-event-receiver` | 接收 YSCP 事件推送（主要）     |
+| POST | `/api/yscp/event-receiver`         | 接收 YSCP 事件推送（向後兼容） |
 | GET  | `/api/cleanup/status`             | 獲取清理服務狀態              |
 | POST | `/api/cleanup/manual`             | 手動觸發清理（臨時檔案）      |
+| GET  | `/api/license/status`             | 獲取授權狀態                  |
+| POST | `/api/license/validate`           | 驗證授權                      |
+| POST | `/api/license/activate`           | 啟用授權                      |
 | GET  | `/health`                         | 健康檢查                      |
 
 ### Line Bot 指令
 
 **基本指令**：
 
-- **版本** - 查看 HCP 平台版本資訊
+- **版本** - 查看 YSCP 平台版本資訊
 - **攝影機** - 查看攝影機列表
 - **擷圖 [ID]** - 擷取指定攝影機圖片
 - **幫助** - 顯示使用說明
@@ -152,8 +154,11 @@ npm run subscribe-events
 ### 快速測試
 
 ```bash
-# 一鍵測試所有功能
-npm run quick-start
+# 測試授權系統
+npm run test-license
+
+# 測試服務
+curl http://localhost:6000/health
 ```
 
 ### 手動測試
@@ -168,11 +173,19 @@ curl http://localhost:6000/api/cleanup/status  # 查看清理服務狀態
 node scripts/user-sync.js                      # 同步用戶資料
 ```
 
+## 🔑 授權系統
+
+系統已整合專業授權管理系統，支援線上驗證、管理後台、硬體指紋綁定等功能。
+
+> 📖 詳細說明請參考 [專業授權管理系統](docs/PROFESSIONAL_LICENSE_SYSTEM.md)
+
 ## 🔐 安全建議
 
 1. ✅ 使用強密碼作為 `EVENT_TOKEN`
 2. ✅ 使用 HTTPS 作為 Webhook URL（生產環境）
 3. ✅ 不要將 `.env` 檔案提交到版本控制
+4. ✅ 生產環境設定 `LICENSE_ENCRYPTION_KEY` 環境變數
+5. ✅ 妥善保管授權生成器工具
 
 ## 🐛 疑難排解
 
@@ -192,8 +205,8 @@ npm run start              # 重新啟動
 
 **無法接收事件**
 
-1. 檢查 HCP 管理介面中的事件訂閱設定
-2. 確認 Webhook URL 正確：`https://您的域名/api/linebot/hcp-event-receiver`
+1. 檢查 YSCP 管理介面中的事件訂閱設定
+2. 確認 Webhook URL 正確：`https://您的域名/api/linebot/yscp-event-receiver`
 3. 檢查 `data/event-types.json` 中的事件類型配置
 4. 查看日誌：`npm run logs-app` 和 `npm run logs-error`
 5. 手動執行事件訂閱：`npm run subscribe-events`
@@ -210,12 +223,14 @@ npm run start              # 重新啟動
 ## 📦 專案結構
 
 ```
-yscp-line-bot/
+YSCP Line Bot/
 ├── app.js                    # 應用程式入口
 ├── config.js                 # 配置檔案
 ├── package.json              # 專案依賴
 ├── ecosystem.config.js        # PM2 配置
-├── quick-start.sh            # 一鍵啟動腳本
+├── installer/                 # 安裝精靈相關檔案
+│   ├── installer.nsh         # NSIS 安裝腳本
+│   └── post-install.js       # 安裝後配置腳本
 ├── controllers/              # 控制器
 │   └── lineBotController.js
 ├── routes/                   # 路由
@@ -224,10 +239,9 @@ yscp-line-bot/
 │   ├── fileSystemService.js  # 檔案系統服務（統一清理管理）
 │   ├── loggerService.js      # 日誌服務（自動清理和輪轉）
 │   ├── lineBotService.js     # Line Bot 服務
-│   ├── hcpClient.js          # HCP API 客戶端
+│   ├── hcpClient.js          # YSCP API 客戶端
 │   └── ...                   # 其他服務
 ├── scripts/                  # 管理腳本
-│   ├── log-cleanup.js        # 日誌清理腳本
 │   ├── subscribe-events.js   # 事件訂閱腳本
 │   └── user-sync.js          # 用戶同步腳本
 ├── data/                     # 配置資料
@@ -245,87 +259,16 @@ yscp-line-bot/
 
 ## 📝 主要命令
 
-### 快速啟動
-
 ```bash
-npm run quick-start      # 一鍵啟動所有服務
-```
-
-### 服務管理（PM2）
-
-```bash
-npm run start      # 啟動服務
+npm start      # 啟動服務
+npm run restart    # 重啟服務
 npm run stop       # 停止服務
-npm run restart    # 重啟服務（推薦）
-npm run reload     # 零停機重載服務
-npm run reset      # 完全重置服務（清除並重新啟動）
-npm run delete     # 完全移除服務
 npm run status     # 查看服務狀態
 npm run logs       # 查看實時日誌
-npm run monitor    # 打開監控儀表板
+npm run subscribe-events  # 手動訂閱事件
 ```
 
-> 📖 詳細重啟流程請參考 [RESTART_GUIDE.md](RESTART_GUIDE.md)
-
-### 用戶管理
-
-**透過 Line Bot 互動管理**（推薦）：
-
-1. 在 Line 中對 Bot 發送「管理」或「admin」指令（需為管理員）
-2. 使用 Flex Message 面板管理用戶
-   - 查看待審核用戶
-   - 審核/拒絕新用戶
-   - 管理現有用戶權限
-
-**手動同步用戶**（腳本）：
-
-```bash
-# 同步 LINE followers 到用戶管理系統
-node scripts/user-sync.js
-```
-
-**用戶角色說明**：
-
-- **admin**：管理員，可以使用所有管理功能
-- **target**：通知目標，可以接收 HCP 事件通知
-- **pending**：待審核，等待管理員審核
-- **blocked**：已封鎖，不會接收任何通知
-
-### 事件管理
-
-**自動訂閱（推薦）**：
-
-```bash
-npm run subscribe-events
-```
-
-**手動訂閱（透過 HCP 管理介面）**：
-
-1. 登入 HCP 管理介面
-2. 前往「事件服務」→「事件訂閱」
-3. 設定 Webhook URL：`https://您的域名/api/linebot/hcp-event-receiver`
-4. 選擇要訂閱的事件類型
-
-**查看事件配置**：
-
-- 事件類型配置：`data/event-types.json`
-- 事件訂閱狀態：透過 HCP 管理介面查看
-
-### 系統監控與清理
-
-```bash
-npm run logs-app                               # 查看系統日誌
-npm run logs-error                             # 查看錯誤日誌
-npm run log-cleanup                           # 手動清理舊日誌（保留7天）
-npm run subscribe-events                      # 手動訂閱事件
-```
-
-**自動清理服務**（已啟用）：
-
-- **臨時檔案** (`temp/`): 每 30 分鐘清理一次，保留 7 天內的圖片檔案
-- **日誌檔案** (`logs/`): 每小時輪轉，每天清理超過 7 天的舊日誌
-
-> 📖 完整命令列表請參考 [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)
+> 📖 完整命令列表請參考 [安裝指南](docs/INSTALLATION_GUIDE.md)
 
 ## 📄 授權
 
