@@ -1,6 +1,16 @@
 {
   "events": [
     {
+      "eventId": "8BF5D66C4ADB47338F02553AAD9BD1CC",
+      "ability": "event_vss",
+      "eventType": 192517,
+      "happenTime": "2025-12-09T17:53:12+08:00",
+      "srcName": "倉庫熱成像",
+      "srcType": "camera",
+      "storedAt": 1765358798938,
+      "imageUrl": null
+    },
+    {
       "eventId": "70144E55161744328FF42CEE6ED1CD5C",
       "ability": "event_vss",
       "eventType": 192517,
@@ -100,5 +110,5 @@
       "imageUrl": null
     }
   ],
-  "lastUpdated": "2025-12-04T08:06:54.060Z"
+  "lastUpdated": "2025-12-10T09:26:38.938Z"
 }

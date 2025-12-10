@@ -33,11 +33,15 @@
 			<div class="step-content active" id="step1">
 				<h2>🔑 步驟 1: 輸入授權</h2>
 				<div class="info-box">
-					<p><strong>說明：</strong>請輸入您的 SerialNumber 以啟用授權。系統會自動從授權伺服器獲取對應的 License Key。</p>
+					<p><strong>說明：</strong>請輸入您的 SerialNumber 和 LicenseKey 以啟用授權。這些資訊需從管理員處獲取。</p>
 				</div>
 				<div class="form-group">
 					<label for="serialNumberInput">SerialNumber</label>
 					<input type="text" id="serialNumberInput" placeholder="例如: SN-001" />
+				</div>
+				<div class="form-group">
+					<label for="licenseKeyInput">LicenseKey</label>
+					<input type="text" id="licenseKeyInput" placeholder="例如: LK-xxxxxxxxxxxx" />
 				</div>
 				<div id="step1-status"></div>
 				<div class="button-group">
@@ -73,6 +77,7 @@
 				<div id="step2-status"></div>
 
 				<div class="button-group">
+					<button onclick="saveConfig()">儲存配置</button>
 					<button onclick="openConfigFile()">開啟配置</button>
 					<button class="success" onclick="validateConfig()">驗證配置</button>
 				</div>
@@ -91,6 +96,17 @@
 				<div class="button-group">
 					<button onclick="testService()" id="testBtn">開始測試</button>
 					<button class="secondary" onclick="stopTest()" id="stopTestBtn" disabled>停止測試</button>
+				</div>
+				
+				<!-- 系統自動生成的配置（測試成功後顯示） -->
+				<div id="system-generated-config" style="display: none; margin-top: 30px;">
+					<div class="info-box" style="background: #e7f3ff; border-left: 4px solid #2196F3;">
+						<p><strong>📋 系統自動生成的配置</strong></p>
+						<p style="margin-top: 10px; color: #d32f2f; font-weight: 600;">
+							⚠️ 請將下方的 <strong>Webhook URL</strong> 填入 Line Developers Console 的 Webhook URL 設定中
+						</p>
+					</div>
+					<div id="system-generated-items" style="margin-top: 15px;"></div>
 				</div>
 			</div>
 

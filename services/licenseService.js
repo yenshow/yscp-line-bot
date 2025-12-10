@@ -53,11 +53,11 @@ function getEnvValue(key, defaultValue = null) {
 	if (process.env[key]) {
 		return process.env[key];
 	}
-	
+
 	// 如果 process.env 沒有，嘗試從 .env 檔案讀取
 	// 優先順序：1. Electron 主進程的安裝目錄 2. 當前工作目錄 3. 相對於服務目錄的父目錄
 	const envPaths = [];
-	
+
 	// 1. 嘗試從 Electron 主進程的安裝目錄讀取（打包後）
 	try {
 		const { app } = require("electron");
@@ -68,7 +68,7 @@ function getEnvValue(key, defaultValue = null) {
 	} catch (error) {
 		// 不在 Electron 環境中，忽略
 	}
-	
+
 	// 2. 嘗試從當前工作目錄讀取
 	try {
 		const cwd = process.cwd();
@@ -76,14 +76,14 @@ function getEnvValue(key, defaultValue = null) {
 	} catch (error) {
 		// 忽略
 	}
-	
+
 	// 3. 嘗試從相對於服務目錄的父目錄讀取（開發環境）
 	try {
 		envPaths.push(path.join(__dirname, "..", ".env"));
 	} catch (error) {
 		// 忽略
 	}
-	
+
 	// 依序嘗試讀取
 	for (const envPath of envPaths) {
 		try {
@@ -95,14 +95,39 @@ function getEnvValue(key, defaultValue = null) {
 			// 繼續嘗試下一個路徑
 		}
 	}
-	
+
 	return defaultValue;
 }
 
 class LicenseService {
 	constructor() {
-		this.licenseFilePath = path.join(FileSystemService.getDirectory("data"), ".license");
-		
+		// 獲取數據目錄路徑（在 Electron 環境中需要特殊處理）
+		let dataDir = FileSystemService.getDirectory("data");
+
+		// 在 Electron 環境中，如果路徑指向 asar 內部，使用應用程式數據目錄
+		try {
+			const { app } = require("electron");
+			if (app && app.isPackaged) {
+				// 打包後：數據應該在應用程式目錄，而不是 asar 內部
+				const appDataPath =
+					process.platform === "darwin" ? path.resolve(path.dirname(process.execPath), "..", "Resources") : path.resolve(path.dirname(process.execPath));
+
+				// 檢查原路徑是否在 asar 中
+				if (dataDir && dataDir.includes(".asar")) {
+					// 使用應用程式數據目錄
+					dataDir = path.join(appDataPath, "data");
+					// 確保目錄存在
+					if (!fs.existsSync(dataDir)) {
+						fs.mkdirSync(dataDir, { recursive: true });
+					}
+				}
+			}
+		} catch (error) {
+			// 不在 Electron 環境中，使用預設路徑
+		}
+
+		this.licenseFilePath = path.join(dataDir, ".license");
+
 		// 授權密鑰（用於加密授權檔案，實際應用中應從環境變數或安全配置讀取）
 		this.encryptionKey = getEnvValue("LICENSE_ENCRYPTION_KEY", "default_encryption_key_change_in_production");
 
@@ -140,7 +165,7 @@ class LicenseService {
 
 			return new Promise((resolve, reject) => {
 				const client = url.protocol === "https:" ? https : http;
-				
+
 				// 如果是 HTTPS，配置 Agent 以處理 SSL 證書
 				if (url.protocol === "https:") {
 					const httpsAgent = new https.Agent({
@@ -148,11 +173,11 @@ class LicenseService {
 					});
 					options.agent = httpsAgent;
 				}
-				
+
 				const req = client.request(url, options, (res) => {
 					let responseData = "";
 					const statusCode = res.statusCode;
-					
+
 					res.on("data", (chunk) => {
 						responseData += chunk;
 					});
@@ -160,23 +185,23 @@ class LicenseService {
 						try {
 							// 記錄原始回應（用於調試）
 							LoggerService.system(`授權 API 回應 (${endpoint}): HTTP ${statusCode}, 回應長度: ${responseData.length}`);
-							
+
 							// 檢查 HTTP 狀態碼
 							if (statusCode < 200 || statusCode >= 300) {
 								// HTTP 錯誤狀態碼
 								let errorMessage = `HTTP ${statusCode}: ${res.statusMessage || "請求失敗"}`;
-								
+
 								// 嘗試解析錯誤回應
 								try {
 									const errorResponse = JSON.parse(responseData);
 									errorMessage = errorResponse.error || errorResponse.message || errorMessage;
-									
+
 									LoggerService.warn(`授權 API 請求失敗 (${endpoint}): HTTP ${statusCode}`, {
 										statusCode,
 										error: errorMessage,
 										response: errorResponse
 									});
-									
+
 									resolve({
 										success: false,
 										error: errorMessage,
@@ -190,7 +215,7 @@ class LicenseService {
 										statusCode,
 										responseData: responseData.substring(0, 200)
 									});
-									
+
 									resolve({
 										success: false,
 										error: errorMessage,
@@ -199,13 +224,13 @@ class LicenseService {
 									return;
 								}
 							}
-							
+
 							// HTTP 狀態碼正常，解析回應
 							const response = JSON.parse(responseData);
-							
+
 							// 記錄回應內容（用於調試）
 							LoggerService.system(`授權 API 回應內容 (${endpoint}):`, JSON.stringify(response).substring(0, 200));
-							
+
 							// 適配新後端的統一回應格式 { success, message, result: { ... } }
 							if (response.success && response.result) {
 								LoggerService.system(`授權 API 成功 (${endpoint}): 從 result 中提取資料`);
@@ -292,14 +317,32 @@ class LicenseService {
 			return { success: false, error: "License Key 不能為空" };
 		}
 
-		return this._makeRequest("/api/license/validate", { licenseKey }, (result) => ({
-			success: true,
-			valid: result.valid,
-			error: result.error,
-			code: result.code,
-			status: result.status,
-			license: result.license
-		}));
+		try {
+			const result = await this._makeRequest("/api/license/validate", { licenseKey }, (result) => ({
+				success: true,
+				valid: result.valid,
+				error: result.error,
+				code: result.code,
+				status: result.status,
+				license: result.license
+			}));
+			return result;
+		} catch (error) {
+			// 處理連線錯誤（如 ECONNREFUSED, ENOTFOUND, timeout 等）
+			let errorMessage = error.message || "無法連接到授權伺服器";
+			if (error.code === "ECONNREFUSED") {
+				errorMessage = "無法連接到授權伺服器，請檢查授權伺服器是否運行";
+			} else if (error.code === "ENOTFOUND") {
+				errorMessage = "無法解析授權伺服器地址，請檢查 LICENSE_SERVER_URL 配置";
+			} else if (error.message && error.message.includes("timeout")) {
+				errorMessage = "連線超時，請檢查網路連接或授權伺服器狀態";
+			}
+			return {
+				success: false,
+				error: errorMessage,
+				code: "CONNECTION_ERROR"
+			};
+		}
 	}
 
 	/**
@@ -384,48 +427,99 @@ class LicenseService {
 				throw new Error("SerialNumber 不能為空");
 			}
 
+			// 檢查是否已經存在授權檔案
+			const existingLicense = this.loadLicense();
+			if (existingLicense) {
+				// 如果已有授權檔案，檢查是否為相同的 SerialNumber 和 LicenseKey
+				if (additionalData && additionalData.licenseKey) {
+					// 手動輸入模式：檢查 SerialNumber 和 LicenseKey 是否都匹配
+					if (existingLicense.serialNumber === serialNumber && existingLicense.licenseKey === additionalData.licenseKey) {
+						LoggerService.system(`授權已存在且匹配: SerialNumber=${serialNumber}，跳過儲存和驗證`);
+						return true; // 已存在相同授權，直接返回成功（不重新驗證，避免後端標記為已使用）
+					}
+				} else if (existingLicense.serialNumber === serialNumber) {
+					// 從伺服器獲取模式：只檢查 SerialNumber
+					LoggerService.system(`授權已存在: SerialNumber=${serialNumber}，跳過儲存`);
+					return true; // 已存在相同授權，直接返回成功
+				}
+				
+				// 不同的授權，需要先刪除舊授權
+				LoggerService.system(`發現不同的授權，將替換舊授權: ${existingLicense.serialNumber} -> ${serialNumber}`);
+				try {
+					FileSystemService.deleteFile(this.licenseFilePath);
+				} catch (error) {
+					LoggerService.warn("刪除舊授權檔案失敗", error);
+				}
+			}
+
 			let licenseKey = null;
 
-			// 從伺服器獲取 License Key
-			if (this.onlineMode) {
-				try {
-					LoggerService.system(`開始從伺服器獲取 License Key: SerialNumber=${serialNumber}`);
-					
-					const keyResult = await this.getLicenseKeyFromServer(serialNumber);
-					LoggerService.system(`getLicenseKeyFromServer 返回結果:`, JSON.stringify(keyResult).substring(0, 200));
-					
-					if (keyResult && keyResult.success && keyResult.licenseKey) {
-						licenseKey = keyResult.licenseKey;
-						LoggerService.system(`成功從伺服器獲取 License Key: ${licenseKey}`);
-					} else {
-						const errorMsg = (keyResult && keyResult.error) || "無法從伺服器獲取 License Key";
-						const errorCode = (keyResult && keyResult.code) || "UNKNOWN_ERROR";
-						LoggerService.error(`從伺服器獲取 License Key 失敗: ${errorMsg} (${errorCode})`, keyResult);
-						throw new Error(errorMsg);
+			// 如果 additionalData 中包含 licenseKey，直接使用（手動輸入模式）
+			if (additionalData && additionalData.licenseKey) {
+				licenseKey = additionalData.licenseKey;
+				LoggerService.system(`使用手動輸入的 License Key: SerialNumber=${serialNumber}`);
+				
+				// 驗證 LicenseKey 是否有效（連接到授權伺服器驗證）
+				// 注意：驗證不會標記為已使用，只有 activateOnline 才會
+				if (this.onlineMode) {
+					try {
+						LoggerService.system(`開始驗證 License Key: SerialNumber=${serialNumber}`);
+						const validateResult = await this.validateOnline(licenseKey);
+						
+						if (!validateResult.success || !validateResult.valid) {
+							const errorMsg = validateResult.error || "License Key 驗證失敗";
+							const errorCode = validateResult.code || "VALIDATION_FAILED";
+							LoggerService.error(`License Key 驗證失敗: ${errorMsg} (${errorCode})`, validateResult);
+							throw new Error(errorMsg);
+						}
+						
+						// 驗證 SerialNumber 是否匹配
+						if (validateResult.license && validateResult.license.serialNumber) {
+							if (validateResult.license.serialNumber !== serialNumber) {
+								const errorMsg = `SerialNumber 不匹配：輸入的 ${serialNumber} 與授權中的 ${validateResult.license.serialNumber} 不一致`;
+								LoggerService.error(errorMsg);
+								throw new Error(errorMsg);
+							}
+						}
+						
+						LoggerService.system(`License Key 驗證成功: SerialNumber=${serialNumber}`);
+					} catch (error) {
+						LoggerService.error("License Key 驗證失敗", error);
+						throw error; // 重新拋出錯誤，保留原始錯誤訊息
 					}
-				} catch (error) {
-					LoggerService.error("從伺服器獲取 License Key 失敗", error);
-					throw error; // 直接拋出錯誤，保留原始錯誤訊息
 				}
 			} else {
-				throw new Error("離線模式無法獲取 License Key，請啟用線上模式");
-			}
+				// 從伺服器獲取 License Key
+				if (this.onlineMode) {
+					try {
+						LoggerService.system(`開始從伺服器獲取 License Key: SerialNumber=${serialNumber}`);
 
-			// 線上啟用（如果啟用）
-			if (this.onlineMode && activateOnline && licenseKey) {
-				try {
-					const activateResult = await this.activateOnline(licenseKey);
-					if (!activateResult.success) {
-						LoggerService.warn("線上啟用失敗", activateResult.error);
-						// 不阻止儲存，但記錄警告
-					} else {
-						LoggerService.system("授權線上啟用成功");
+						const keyResult = await this.getLicenseKeyFromServer(serialNumber);
+						LoggerService.system(`getLicenseKeyFromServer 返回結果:`, JSON.stringify(keyResult).substring(0, 200));
+
+						if (keyResult && keyResult.success && keyResult.licenseKey) {
+							licenseKey = keyResult.licenseKey;
+							LoggerService.system(`成功從伺服器獲取 License Key: ${licenseKey}`);
+						} else {
+							const errorMsg = (keyResult && keyResult.error) || "無法從伺服器獲取 License Key";
+							const errorCode = (keyResult && keyResult.code) || "UNKNOWN_ERROR";
+							LoggerService.error(`從伺服器獲取 License Key 失敗: ${errorMsg} (${errorCode})`, keyResult);
+							throw new Error(errorMsg);
+						}
+					} catch (error) {
+						LoggerService.error("從伺服器獲取 License Key 失敗", error);
+						throw error; // 直接拋出錯誤，保留原始錯誤訊息
 					}
-				} catch (error) {
-					LoggerService.warn("線上啟用錯誤", error);
+				} else {
+					throw new Error("離線模式無法獲取 License Key，請啟用線上模式");
 				}
 			}
 
+			if (!licenseKey) {
+				throw new Error("License Key 不能為空");
+			}
+
+			// 先準備授權資料（不啟用）
 			const licenseData = {
 				serialNumber,
 				licenseKey,
@@ -435,19 +529,89 @@ class LicenseService {
 			};
 
 			// 加密儲存
-			const encrypted = this.encrypt(JSON.stringify(licenseData));
-
-			// 使用 FileSystemService 確保目錄存在
-			const success = FileSystemService.writeFile(this.licenseFilePath, encrypted);
-
-			if (success) {
-				LoggerService.system(`授權已儲存: SerialNumber=${serialNumber}, LicenseKey=${licenseKey}`);
+			let encrypted;
+			try {
+				encrypted = this.encrypt(JSON.stringify(licenseData));
+			} catch (error) {
+				LoggerService.error("加密授權資料失敗", error);
+				throw new Error(`加密授權資料失敗: ${error.message}`);
 			}
 
-			return success;
+			// 確保目錄存在
+			const dirPath = path.dirname(this.licenseFilePath);
+			try {
+				if (!fs.existsSync(dirPath)) {
+					fs.mkdirSync(dirPath, { recursive: true });
+					LoggerService.system(`已建立授權目錄: ${dirPath}`);
+				}
+			} catch (mkdirError) {
+				LoggerService.error(`無法建立授權目錄: ${dirPath}`, mkdirError);
+				throw new Error(`無法建立授權目錄: ${mkdirError.message}`);
+			}
+
+			// 嘗試直接寫入檔案（不使用 FileSystemService，因為可能有路徑問題）
+			try {
+				fs.writeFileSync(this.licenseFilePath, encrypted, "utf8");
+				LoggerService.system(`授權檔案已寫入: ${this.licenseFilePath}`);
+			} catch (writeError) {
+				// 檔案寫入失敗，檢查可能的原因
+				let errorMsg = `無法寫入授權檔案: ${this.licenseFilePath}`;
+
+				// 檢查目錄權限
+				try {
+					if (!fs.existsSync(dirPath)) {
+						errorMsg += "\n原因：目錄不存在";
+					} else {
+						// 檢查是否有寫入權限
+						try {
+							fs.accessSync(dirPath, fs.constants.W_OK);
+							errorMsg += "\n原因：檔案寫入失敗（可能是權限問題或磁碟空間不足）";
+						} catch (accessError) {
+							errorMsg += "\n原因：沒有寫入權限";
+						}
+					}
+				} catch (checkError) {
+					errorMsg += `\n原因：${checkError.message}`;
+				}
+
+				// 添加詳細的調試資訊
+				errorMsg += `\n檔案路徑：${this.licenseFilePath}`;
+				errorMsg += `\n目錄路徑：${dirPath}`;
+
+				LoggerService.error(errorMsg, {
+					filePath: this.licenseFilePath,
+					dirPath: dirPath,
+					error: writeError.message,
+					code: writeError.code
+				});
+				throw new Error(errorMsg);
+			}
+
+			LoggerService.system(`授權已儲存: SerialNumber=${serialNumber}, LicenseKey=${licenseKey}`);
+
+			// 儲存成功後，再進行線上啟用（如果啟用）
+			// 這樣可以確保只有在儲存成功後才標記授權為已使用
+			if (this.onlineMode && activateOnline && licenseKey) {
+				try {
+					LoggerService.system(`開始線上啟用授權: SerialNumber=${serialNumber}`);
+					const activateResult = await this.activateOnline(licenseKey);
+					if (!activateResult.success) {
+						LoggerService.warn("線上啟用失敗", activateResult.error);
+						// 不阻止儲存，但記錄警告（授權已儲存，只是啟用失敗）
+					} else {
+						LoggerService.system("授權線上啟用成功");
+					}
+				} catch (error) {
+					LoggerService.warn("線上啟用錯誤", error);
+					// 不阻止儲存，但記錄警告（授權已儲存，只是啟用失敗）
+				}
+			}
+
+			return true;
 		} catch (error) {
 			LoggerService.error("儲存授權失敗", error);
-			return false;
+			// 重新拋出錯誤，讓調用者可以獲取詳細錯誤訊息
+			throw error;
 		}
 	}
 

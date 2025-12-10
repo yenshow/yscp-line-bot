@@ -15,9 +15,9 @@ async function subscribeEvents() {
 	console.log("==============================\n");
 
 	// 檢查配置
-	if (!process.env.HCP_AK || !process.env.HCP_SK) {
-		console.error("❌ HCP API 配置不完整");
-		console.error("   請確認 .env 檔案中已設定 HCP_AK 和 HCP_SK");
+	if (!process.env.YSCP_AK || !process.env.YSCP_SK) {
+		console.error("❌ YSCP API 配置不完整");
+		console.error("   請確認 .env 檔案中已設定 YSCP_AK 和 YSCP_SK");
 		process.exit(1);
 	}
 
@@ -27,10 +27,59 @@ async function subscribeEvents() {
 		process.exit(1);
 	}
 
-	if (!process.env.EVENT_TOKEN) {
-		console.error("❌ EVENT_TOKEN 未設定");
-		console.error("   請確認 .env 檔案中已設定 EVENT_TOKEN");
-		process.exit(1);
+	// EVENT_TOKEN 現在由系統自動生成，如果不存在則生成一個
+	if (!process.env.EVENT_TOKEN || process.env.EVENT_TOKEN.trim() === "") {
+		const crypto = require("crypto");
+		const fs = require("fs");
+		const path = require("path");
+		const envPath = path.join(process.cwd(), ".env");
+		
+		// 生成新的 EVENT_TOKEN
+		const newToken = crypto.randomBytes(32).toString("base64");
+		
+		// 讀取並更新 .env 檔案
+		let content = "";
+		if (fs.existsSync(envPath)) {
+			content = fs.readFileSync(envPath, "utf-8");
+		}
+		
+		const lines = content.split("\n");
+		const newLines = [];
+		let tokenUpdated = false;
+		
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (line.trim().match(/^EVENT_TOKEN\s*=/)) {
+				newLines.push(`EVENT_TOKEN=${newToken}`);
+				tokenUpdated = true;
+			} else {
+				newLines.push(line);
+			}
+		}
+		
+		if (!tokenUpdated) {
+			// 如果沒有找到，在 Webhook 配置區段後添加
+			let insertIndex = newLines.length;
+			for (let i = 0; i < newLines.length; i++) {
+				if (newLines[i].includes("# Webhook")) {
+					insertIndex = i + 1;
+					for (let j = i + 1; j < newLines.length; j++) {
+						const nextLine = newLines[j].trim();
+						if (nextLine && !nextLine.startsWith("#") && nextLine.includes("=")) {
+							insertIndex = j + 1;
+						} else if (nextLine.startsWith("#")) {
+							break;
+						}
+					}
+					break;
+				}
+			}
+			newLines.splice(insertIndex, 0, `EVENT_TOKEN=${newToken}`);
+		}
+		
+		fs.writeFileSync(envPath, newLines.join("\n"), "utf-8");
+		process.env.EVENT_TOKEN = newToken;
+		console.log("✅ 已自動生成 EVENT_TOKEN");
 	}
 
 	// 載入事件類型配置

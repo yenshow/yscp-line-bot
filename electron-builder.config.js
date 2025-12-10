@@ -68,7 +68,6 @@ module.exports = {
 		include: "installer/installer.nsh",
 		license: "LICENSE",
 		runAfterFinish: true,
-		script: "installer/installer.nsh",
 		// 減少防毒軟體誤判的設定
 		warningsAsErrors: false,
 		// 使用標準壓縮方式
@@ -105,9 +104,7 @@ module.exports = {
 	nodeGypRebuild: false,
 	buildDependenciesFromSource: false,
 	// 減少防毒軟體誤判：排除不必要的檔案
-	asarUnpack: [
-		"node_modules/ngrok/bin/**/*"
-	],
+	asarUnpack: ["node_modules/ngrok/bin/**/*"],
 	afterAllArtifactBuild: async (context) => {
 		// 自動清理無用檔案
 		const { artifacts } = context;
